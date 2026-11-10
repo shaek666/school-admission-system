@@ -1,0 +1,33 @@
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+
+namespace SchoolAdmission.Api.Tests.Infrastructure;
+
+public sealed class AppFactory : WebApplicationFactory<Program>
+{
+    private const string DefaultConnectionString =
+        "Host=localhost;Database=admission_test;Username=postgres;Password=postgres;Maximum Pool Size=40;Timeout=60";
+
+    private readonly Dictionary<string, string> _settings = new()
+    {
+        ["ConnectionStrings:Default"] = ConnectionString,
+        ["EXPIRY_SWEEP_SECONDS"] = "3600",
+    };
+
+    public static string ConnectionString { get; } =
+        Environment.GetEnvironmentVariable("ConnectionStrings__Default") ?? DefaultConnectionString;
+
+    public AppFactory WithSetting(string key, string value)
+    {
+        _settings[key] = value;
+        return this;
+    }
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        foreach (var (key, value) in _settings)
+        {
+            builder.UseSetting(key, value);
+        }
+    }
+}

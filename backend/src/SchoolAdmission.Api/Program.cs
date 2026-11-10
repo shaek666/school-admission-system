@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SchoolAdmission.Api;
+using SchoolAdmission.Api.Http;
+using SchoolAdmission.Business;
 using SchoolAdmission.Business.Holds;
 using SchoolAdmission.DataAccess;
 
@@ -20,6 +22,12 @@ builder.Services.AddSingleton<IValidateOptions<HoldOptions>, HoldOptionsSetup>()
 builder.Services.Configure<DataAccessOptions>(builder.Configuration.GetSection(DataAccessOptions.SectionName));
 builder.Services.AddDbContext<AdmissionDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddSingleton<DatabaseMigrator>();
+builder.Services.AddSingleton<IExceptionTranslator, PostgresExceptionTranslator>();
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
+    .AllowAnyOrigin()
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+    .WithExposedHeaders("Date")));
 
 var app = builder.Build();
 
@@ -27,6 +35,13 @@ var app = builder.Build();
 _ = app.Services.GetRequiredService<IOptions<HoldOptions>>().Value;
 
 await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync(app.Lifetime.ApplicationStopping);
+
+// Order matters. Errors outermost, then empty-body 4xx and 5xx, then CORS before routing so preflights
+// to any path (even unknown ones) are answered, then routing and endpoints.
+app.UseMiddleware<ErrorHandlingMiddleware>();
+app.UseStatusCodePages(StatusCodeBody.WriteAsync);
+app.UseCors();
+app.UseRouting();
 
 app.Run();
 

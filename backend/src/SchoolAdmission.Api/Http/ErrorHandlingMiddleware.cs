@@ -24,6 +24,17 @@ public sealed class ErrorHandlingMiddleware(
 
     private async Task HandleAsync(HttpContext context, Exception exception)
     {
+        // Drop headers that the endpoint set before it threw (for example Location or Content-Length),
+        // but keep CORS headers, so the browser can still read the error.
+        var corsHeaders = context.Response.Headers
+            .Where(header => header.Key.StartsWith("Access-Control-", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        context.Response.Clear();
+        foreach (var (name, value) in corsHeaders)
+        {
+            context.Response.Headers[name] = value;
+        }
+
         if (exception is BadHttpRequestException badRequest && !IsBadBody(badRequest))
         {
             var (code, message) = StatusCodeBody.Describe(badRequest.StatusCode);
@@ -34,7 +45,9 @@ public sealed class ErrorHandlingMiddleware(
         var appException = exception switch
         {
             AppException app => app,
-            JsonException or BadHttpRequestException => Errors.InvalidJson(),
+            // With ThrowOnBadRequest, a bad request body always arrives wrapped in BadHttpRequestException.
+            // A bare JsonException comes from the server (for example response serialization), so it is a 500.
+            BadHttpRequestException => Errors.InvalidJson(),
             _ => translator.Translate(exception)
         };
 
@@ -50,6 +63,9 @@ public sealed class ErrorHandlingMiddleware(
 
         if (appException.Kind == ErrorKind.Busy)
         {
+            // Log the type only. The exception text can carry query values.
+            logger.LogWarning("Database busy ({ExceptionType}) for {Method} {Path}",
+                exception.GetType().Name, context.Request.Method, context.Request.Path);
             context.Response.Headers.RetryAfter = RetryAfterSeconds;
         }
 

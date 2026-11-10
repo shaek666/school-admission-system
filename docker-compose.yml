@@ -24,6 +24,7 @@ services:
       EXPIRY_SWEEP_SECONDS: ${EXPIRY_SWEEP_SECONDS:-30}
     ports:
       - "8080:8080"
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy

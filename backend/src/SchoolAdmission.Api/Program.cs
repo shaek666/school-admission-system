@@ -17,9 +17,12 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 
 builder.Services.AddHoldOptions(builder.Configuration);
-builder.Services.Configure<DataAccessOptions>(builder.Configuration.GetSection(DataAccessOptions.SectionName));
+builder.Services.AddOptions<DataAccessOptions>()
+    .Bind(builder.Configuration.GetSection(DataAccessOptions.SectionName))
+    .Validate(options => options.LockTimeoutSeconds > 0, "DataAccess:LockTimeoutSeconds must be a positive integer.")
+    .ValidateOnStart();
 builder.Services.AddDbContext<AdmissionDbContext>(options => options
-    .UseNpgsql(connectionString)
+    .UseNpgsql(connectionString, npgsql => npgsql.CommandTimeout(DataAccessOptions.CommandTimeoutSeconds))
     .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
 builder.Services.AddSingleton<DatabaseMigrator>();
 builder.Services.AddSingleton<IExceptionTranslator, PostgresExceptionTranslator>();

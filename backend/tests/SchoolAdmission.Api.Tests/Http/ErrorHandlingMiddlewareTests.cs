@@ -80,7 +80,7 @@ public class ErrorHandlingMiddlewareTests
 
     public static TheoryData<Exception, int, string> BadRequests => new()
     {
-        { new JsonException(SecretText), 400, "INVALID_JSON" },
+        { new JsonException(SecretText), 500, "INTERNAL_ERROR" },
         { new BadHttpRequestException(SecretText, StatusCodes.Status400BadRequest, new JsonException(SecretText)), 400, "INVALID_JSON" },
         { new BadHttpRequestException("Required parameter \"Request body\" was not provided from body."), 400, "INVALID_JSON" },
         { new BadHttpRequestException(SecretText, StatusCodes.Status413PayloadTooLarge), 413, "PAYLOAD_TOO_LARGE" },
@@ -156,6 +156,26 @@ public class ErrorHandlingMiddlewareTests
         await middleware.InvokeAsync(context);
 
         Assert.Equal("*", context.Response.Headers.AccessControlAllowOrigin.ToString());
+        Assert.Equal(404, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Stale_endpoint_headers_are_dropped_on_error()
+    {
+        var context = NewContext();
+        var middleware = new ErrorHandlingMiddleware(
+            ctx =>
+            {
+                ctx.Response.Headers.Location = "/classes/stale";
+                ctx.Response.ContentLength = 999;
+                throw Errors.HoldNotFound();
+            },
+            new FakeTranslator(null), NullLogger<ErrorHandlingMiddleware>.Instance);
+
+        await middleware.InvokeAsync(context);
+
+        Assert.False(context.Response.Headers.ContainsKey("Location"));
+        Assert.NotEqual(999, context.Response.ContentLength);
         Assert.Equal(404, context.Response.StatusCode);
     }
 }

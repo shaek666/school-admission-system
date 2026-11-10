@@ -1,0 +1,16 @@
+# .NET
+bin/
+obj/
+TestResults/
+*.user
+.vs/
+
+# Node
+node_modules/
+dist/
+coverage/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store

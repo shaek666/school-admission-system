@@ -14,5 +14,30 @@ services:
       retries: 30
     restart: unless-stopped
 
+  backend:
+    build:
+      context: ./backend
+      target: runtime
+    environment:
+      ConnectionStrings__Default: ${DB_CONNECTION_STRING:-Host=postgres;Port=5432;Database=admission;Username=postgres;Password=postgres;Maximum Pool Size=40;Timeout=60}
+      HOLD_DURATION_SECONDS: ${HOLD_DURATION_SECONDS:-600}
+      EXPIRY_SWEEP_SECONDS: ${EXPIRY_SWEEP_SECONDS:-30}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend-tests:
+    build:
+      context: ./backend
+      target: test
+    profiles: [test]
+    environment:
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=admission_test;Username=postgres;Password=postgres;Maximum Pool Size=40;Timeout=60
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   pgdata:

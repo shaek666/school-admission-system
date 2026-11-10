@@ -15,8 +15,9 @@ RUN dotnet build SchoolAdmission.sln -c Release --no-restore
 FROM build AS test
 ENTRYPOINT ["dotnet", "test", "SchoolAdmission.sln", "-c", "Release", "--no-build"]
 
-FROM build AS publish
-RUN dotnet publish src/SchoolAdmission.Api/SchoolAdmission.Api.csproj -c Release --no-build -o /app
+FROM restore AS publish
+COPY src/ src/
+RUN dotnet publish src/SchoolAdmission.Api/SchoolAdmission.Api.csproj -c Release --no-restore -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app

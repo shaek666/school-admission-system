@@ -3,14 +3,8 @@ using SchoolAdmission.DataAccess.Entities;
 
 namespace SchoolAdmission.DataAccess;
 
-public sealed class AdmissionDbContext : DbContext
+public sealed class AdmissionDbContext(DbContextOptions<AdmissionDbContext> options) : DbContext(options)
 {
-    public AdmissionDbContext(DbContextOptions<AdmissionDbContext> options)
-        : base(options)
-    {
-        ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
-    }
-
     public DbSet<ClassEntity> Classes => Set<ClassEntity>();
 
     public DbSet<HoldEntity> Holds => Set<HoldEntity>();

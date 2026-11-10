@@ -1,5 +1,6 @@
 using Npgsql;
 using SchoolAdmission.Api.Tests.Infrastructure;
+using SchoolAdmission.DataAccess;
 
 namespace SchoolAdmission.Api.Tests;
 
@@ -9,7 +10,7 @@ public class SchemaTests
     [Fact]
     public async Task Partial_unique_index_exists() =>
         Assert.Equal(1L, await Sql.ScalarAsync<long>(
-            "select count(*) from pg_indexes where indexname = 'ux_holds_student_class_active'"));
+            "select count(*) from pg_indexes where indexname = $1", DbNames.ActiveHoldIndex));
 
     [Fact]
     public async Task Student_id_check_rejects_16_digits()
@@ -23,6 +24,6 @@ public class SchemaTests
             "values ($1, $2, '1234567890123456', 'HELD', now() + interval '1 hour', now())",
             Guid.NewGuid(), classId));
 
-        Assert.Equal("23514", ex.SqlState);
+        Assert.Equal(PostgresErrorCodes.CheckViolation, ex.SqlState);
     }
 }

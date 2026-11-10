@@ -43,8 +43,8 @@ public sealed class ErrorHandlingMiddleware(
             // Log the exception only. Never log the request body.
             logger.LogError(exception, "Unhandled exception for {Method} {Path}",
                 context.Request.Method, context.Request.Path);
-            await ErrorBody.WriteAsync(context.Response, StatusCodes.Status500InternalServerError,
-                "INTERNAL_ERROR", "Something went wrong on our side. Please try again.");
+            var (code, message) = StatusCodeBody.Describe(StatusCodes.Status500InternalServerError);
+            await ErrorBody.WriteAsync(context.Response, StatusCodes.Status500InternalServerError, code, message);
             return;
         }
 
@@ -59,6 +59,8 @@ public sealed class ErrorHandlingMiddleware(
     /// <summary>
     /// True when a BadHttpRequestException is a 400 about the request body: it wraps a JsonException, or its
     /// framework message says the body could not be read or was not provided. Any other status or 400 is not.
+    /// Stopgap: it matches ASP.NET message text. Replace it with source-side body binding when the first
+    /// body endpoint lands (Task 7/8).
     /// </summary>
     private static bool IsBadBody(BadHttpRequestException exception)
     {

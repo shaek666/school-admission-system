@@ -6,7 +6,6 @@ namespace SchoolAdmission.DataAccess;
 
 public sealed class PostgresExceptionTranslator : IExceptionTranslator
 {
-    private const string LockNotAvailable = "55P03";
     private const string PoolExhaustedText = "The connection pool has been exhausted";
 
     public AppException? Translate(Exception exception)
@@ -17,7 +16,7 @@ public sealed class PostgresExceptionTranslator : IExceptionTranslator
         {
             PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: DbNames.ActiveHoldIndex }
                 => Errors.AlreadyApplied(),
-            PostgresException { SqlState: LockNotAvailable } => Errors.ServiceBusy(),
+            PostgresException { SqlState: PostgresErrorCodes.LockNotAvailable } => Errors.ServiceBusy(),
             NpgsqlException npgsql when IsPoolTimeout(npgsql) => Errors.ServiceBusy(),
             _ => null
         };

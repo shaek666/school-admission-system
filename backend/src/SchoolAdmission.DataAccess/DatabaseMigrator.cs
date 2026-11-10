@@ -9,19 +9,9 @@ namespace SchoolAdmission.DataAccess;
 /// Creates the database if it is missing, then applies migrations under a Postgres advisory lock,
 /// because EF Core 8 does not lock migrations and two hosts that start together can race.
 /// </summary>
-public sealed class DatabaseMigrator
+public sealed class DatabaseMigrator(IServiceScopeFactory scopeFactory, ILogger<DatabaseMigrator> logger)
 {
     private const string MaintenanceDatabase = "postgres";
-    private const string DuplicateDatabaseSqlState = PostgresErrorCodes.DuplicateDatabase;
-
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<DatabaseMigrator> _logger;
-
-    public DatabaseMigrator(IServiceScopeFactory scopeFactory, ILogger<DatabaseMigrator> logger)
-    {
-        _scopeFactory = scopeFactory;
-        _logger = logger;
-    }
 
     public async Task MigrateAsync(CancellationToken cancellationToken)
     {
@@ -36,7 +26,7 @@ public sealed class DatabaseMigrator
                 !cancellationToken.IsCancellationRequested
                 && attempt < DataAccessOptions.MigrationMaxAttempts)
             {
-                _logger.LogWarning(
+                logger.LogWarning(
                     ex,
                     "Database migration attempt {Attempt} of {MaxAttempts} failed. Retrying.",
                     attempt,
@@ -48,7 +38,7 @@ public sealed class DatabaseMigrator
 
     private async Task MigrateOnceAsync(CancellationToken cancellationToken)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
+        await using var scope = scopeFactory.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<AdmissionDbContext>();
         var connectionString = context.Database.GetConnectionString()
             ?? throw new InvalidOperationException("The DbContext has no connection string.");
@@ -56,23 +46,17 @@ public sealed class DatabaseMigrator
         await EnsureDatabaseExistsAsync(connectionString, cancellationToken);
 
         // OpenConnectionAsync keeps one connection open, so the lock, the migration and the unlock share a session.
+        // Disposing the scope closes the connection.
         await context.Database.OpenConnectionAsync(cancellationToken);
+        await context.Database.ExecuteSqlAsync(
+            $"select pg_advisory_lock({DataAccessOptions.MigrationLockKey})", cancellationToken);
         try
         {
-            await context.Database.ExecuteSqlAsync(
-                $"select pg_advisory_lock({DataAccessOptions.MigrationLockKey})", cancellationToken);
-            try
-            {
-                await context.Database.MigrateAsync(cancellationToken);
-            }
-            finally
-            {
-                await UnlockAsync(context);
-            }
+            await context.Database.MigrateAsync(cancellationToken);
         }
         finally
         {
-            await context.Database.CloseConnectionAsync();
+            await UnlockAsync(context);
         }
     }
 
@@ -88,7 +72,7 @@ public sealed class DatabaseMigrator
             // The explicit unlock is what releases the lock. With pooling, closing only returns the physical
             // connection to the pool, and Npgsql resets session state (DISCARD ALL) on the next use, not at close.
             // A failed unlock usually means a dead connection, and the server drops its lock, so it is not fatal.
-            _logger.LogWarning(ex, "Releasing the migration advisory lock failed.");
+            logger.LogWarning(ex, "Releasing the migration advisory lock failed.");
         }
     }
 
@@ -114,17 +98,14 @@ public sealed class DatabaseMigrator
             return;
         }
 
-        await using var create = new NpgsqlCommand($"create database {QuoteIdentifier(databaseName)}", connection);
+        await using var create = new NpgsqlCommand($"create database {new NpgsqlCommandBuilder().QuoteIdentifier(databaseName)}", connection);
         try
         {
             await create.ExecuteNonQueryAsync(cancellationToken);
         }
-        catch (PostgresException ex) when (ex.SqlState == DuplicateDatabaseSqlState)
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.DuplicateDatabase)
         {
             // Another host created it between the check and the create. That is fine.
         }
     }
-
-    private static string QuoteIdentifier(string identifier) =>
-        "\"" + identifier.Replace("\"", "\"\"") + "\"";
 }

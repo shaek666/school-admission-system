@@ -16,15 +16,9 @@ public class ErrorHandlingMiddlewareTests
         public AppException? Translate(Exception exception) => result;
     }
 
-    private sealed class StartedResponseFeature : IHttpResponseFeature
+    private sealed class StartedResponseFeature : HttpResponseFeature
     {
-        public int StatusCode { get; set; } = 200;
-        public string? ReasonPhrase { get; set; }
-        public IHeaderDictionary Headers { get; set; } = new HeaderDictionary();
-        public Stream Body { get; set; } = new MemoryStream();
-        public bool HasStarted => true;
-        public void OnStarting(Func<object, Task> callback, object state) { }
-        public void OnCompleted(Func<object, Task> callback, object state) { }
+        public override bool HasStarted => true;
     }
 
     private static DefaultHttpContext NewContext()
@@ -73,82 +67,38 @@ public class ErrorHandlingMiddlewareTests
         Assert.Equal(exception.Message, message);
     }
 
-    [Fact]
-    public async Task Busy_sets_retry_after_2()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Retry_after_is_set_only_for_busy(bool busy)
     {
-        var context = await RunAsync(Errors.ServiceBusy());
+        var context = await RunAsync(busy ? Errors.ServiceBusy() : Errors.HoldNotFound());
 
-        Assert.Equal("2", context.Response.Headers.RetryAfter.ToString());
+        Assert.Equal(busy ? "2" : string.Empty, context.Response.Headers.RetryAfter.ToString());
+        Assert.Equal(busy, context.Response.Headers.ContainsKey("Retry-After"));
     }
 
-    [Fact]
-    public async Task Non_busy_error_has_no_retry_after()
+    public static TheoryData<Exception, int, string> BadRequests => new()
     {
-        var context = await RunAsync(Errors.HoldNotFound());
-
-        Assert.False(context.Response.Headers.ContainsKey("Retry-After"));
-    }
-
-    [Fact]
-    public async Task Bad_json_gives_400_invalid_json()
-    {
-        var context = await RunAsync(new JsonException(SecretText));
-
-        Assert.Equal(400, context.Response.StatusCode);
-        var (code, message) = ReadError(context);
-        Assert.Equal("INVALID_JSON", code);
-        Assert.DoesNotContain(SecretText, message);
-    }
-
-    [Fact]
-    public async Task Bad_request_with_inner_json_exception_gives_400_invalid_json()
-    {
-        var thrown = new BadHttpRequestException(SecretText, StatusCodes.Status400BadRequest, new JsonException(SecretText));
-
-        var context = await RunAsync(thrown);
-
-        Assert.Equal(400, context.Response.StatusCode);
-        var (code, message) = ReadError(context);
-        Assert.Equal("INVALID_JSON", code);
-        Assert.DoesNotContain(SecretText, message);
-    }
-
-    [Fact]
-    public async Task Bad_request_about_the_body_gives_400_invalid_json()
-    {
-        var thrown = new BadHttpRequestException("Required parameter \"Request body\" was not provided from body.");
-
-        var context = await RunAsync(thrown);
-
-        Assert.Equal(400, context.Response.StatusCode);
-        Assert.Equal("INVALID_JSON", ReadError(context).Code);
-    }
-
-    [Fact]
-    public async Task Bad_request_with_413_keeps_its_status_and_is_not_invalid_json()
-    {
-        var thrown = new BadHttpRequestException(SecretText, StatusCodes.Status413PayloadTooLarge);
-
-        var context = await RunAsync(thrown);
-
-        Assert.Equal(413, context.Response.StatusCode);
-        var (code, message) = ReadError(context);
-        Assert.Equal("PAYLOAD_TOO_LARGE", code);
-        Assert.DoesNotContain(SecretText, message);
-    }
-
-    [Fact]
-    public async Task Bad_request_400_not_about_the_body_gives_bad_request()
-    {
+        { new JsonException(SecretText), 400, "INVALID_JSON" },
+        { new BadHttpRequestException(SecretText, StatusCodes.Status400BadRequest, new JsonException(SecretText)), 400, "INVALID_JSON" },
+        { new BadHttpRequestException("Required parameter \"Request body\" was not provided from body."), 400, "INVALID_JSON" },
+        { new BadHttpRequestException(SecretText, StatusCodes.Status413PayloadTooLarge), 413, "PAYLOAD_TOO_LARGE" },
         // No JsonException inside and no body in the message (for example a missing query value),
         // so it is a generic 400 and not a JSON problem.
-        var thrown = new BadHttpRequestException(
-            "Required parameter \"int page\" was not provided from query string.");
+        { new BadHttpRequestException("Required parameter \"int page\" was not provided from query string."), 400, "BAD_REQUEST" },
+    };
 
+    [Theory]
+    [MemberData(nameof(BadRequests))]
+    public async Task Bad_input_maps_to_status_and_code_without_leaking_text(Exception thrown, int status, string expectedCode)
+    {
         var context = await RunAsync(thrown);
 
-        Assert.Equal(400, context.Response.StatusCode);
-        Assert.Equal("BAD_REQUEST", ReadError(context).Code);
+        Assert.Equal(status, context.Response.StatusCode);
+        var (code, message) = ReadError(context);
+        Assert.Equal(expectedCode, code);
+        Assert.DoesNotContain(SecretText, message);
     }
 
     [Fact]

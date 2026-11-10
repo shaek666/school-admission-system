@@ -1,39 +1,29 @@
-using Microsoft.Extensions.Options;
 using SchoolAdmission.Business.Holds;
 
 namespace SchoolAdmission.Api;
 
-/// <summary>Reads the two root env keys and rejects anything that is not a positive integer.</summary>
-public sealed class HoldOptionsSetup(IConfiguration configuration)
-    : IConfigureOptions<HoldOptions>, IValidateOptions<HoldOptions>
+public static class HoldOptionsSetup
 {
     public const string DurationKey = "HOLD_DURATION_SECONDS";
     public const string SweepKey = "EXPIRY_SWEEP_SECONDS";
 
-    public void Configure(HoldOptions options)
+    /// <summary>Reads the two root env keys and rejects anything that is not a positive integer.</summary>
+    public static IServiceCollection AddHoldOptions(this IServiceCollection services, IConfiguration configuration)
     {
-        options.DurationSeconds = ReadOrZero(DurationKey, HoldOptions.DefaultDurationSeconds);
-        options.SweepSeconds = ReadOrZero(SweepKey, HoldOptions.DefaultSweepSeconds);
+        services.AddOptions<HoldOptions>()
+            .Configure(options =>
+            {
+                options.DurationSeconds = ReadOrZero(configuration, DurationKey, HoldOptions.DefaultDurationSeconds);
+                options.SweepSeconds = ReadOrZero(configuration, SweepKey, HoldOptions.DefaultSweepSeconds);
+            })
+            .Validate(options => options.DurationSeconds > 0, Describe(configuration, DurationKey))
+            .Validate(options => options.SweepSeconds > 0, Describe(configuration, SweepKey))
+            .ValidateOnStart();
+        return services;
     }
 
-    public ValidateOptionsResult Validate(string? name, HoldOptions options)
-    {
-        var failures = new List<string>();
-        if (options.DurationSeconds <= 0)
-        {
-            failures.Add(Describe(DurationKey));
-        }
-
-        if (options.SweepSeconds <= 0)
-        {
-            failures.Add(Describe(SweepKey));
-        }
-
-        return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
-    }
-
-    // An unparsable value becomes 0, which Validate then rejects with the key name.
-    private int ReadOrZero(string key, int fallback)
+    // An unparsable value becomes 0, which the validators then reject with the key name.
+    private static int ReadOrZero(IConfiguration configuration, string key, int fallback)
     {
         var raw = configuration[key];
         if (string.IsNullOrWhiteSpace(raw))
@@ -44,6 +34,6 @@ public sealed class HoldOptionsSetup(IConfiguration configuration)
         return int.TryParse(raw, out var value) ? value : 0;
     }
 
-    private string Describe(string key) =>
+    private static string Describe(IConfiguration configuration, string key) =>
         $"{key} must be a positive integer, but the value is '{configuration[key]}'.";
 }

@@ -4,7 +4,6 @@ using Microsoft.Extensions.Options;
 using SchoolAdmission.Api;
 using SchoolAdmission.Api.Http;
 using SchoolAdmission.Business;
-using SchoolAdmission.Business.Holds;
 using SchoolAdmission.DataAccess;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,11 +16,11 @@ if (string.IsNullOrWhiteSpace(connectionString))
         "Set ConnectionStrings__Default.");
 }
 
-builder.Services.AddOptions<HoldOptions>().ValidateOnStart();
-builder.Services.AddSingleton<IConfigureOptions<HoldOptions>, HoldOptionsSetup>();
-builder.Services.AddSingleton<IValidateOptions<HoldOptions>, HoldOptionsSetup>();
+builder.Services.AddHoldOptions(builder.Configuration);
 builder.Services.Configure<DataAccessOptions>(builder.Configuration.GetSection(DataAccessOptions.SectionName));
-builder.Services.AddDbContext<AdmissionDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddDbContext<AdmissionDbContext>(options => options
+    .UseNpgsql(connectionString)
+    .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
 builder.Services.AddSingleton<DatabaseMigrator>();
 builder.Services.AddSingleton<IExceptionTranslator, PostgresExceptionTranslator>();
 // Binding failures throw BadHttpRequestException in every environment (the default is Development only),
@@ -35,8 +34,8 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
 
 var app = builder.Build();
 
-// Read the options now so a bad setting fails before any database work.
-_ = app.Services.GetRequiredService<IOptions<HoldOptions>>().Value;
+// Validate the options now so a bad setting fails before any database work.
+app.Services.GetRequiredService<IStartupValidator>().Validate();
 
 await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync(app.Lifetime.ApplicationStopping);
 

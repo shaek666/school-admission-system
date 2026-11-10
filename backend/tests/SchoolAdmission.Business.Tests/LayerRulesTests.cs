@@ -5,7 +5,7 @@ public class LayerRulesTests
     [Fact]
     public void Business_references_no_lower_layer()
     {
-        var names = typeof(SchoolAdmission.Business.Errors.AppException).Assembly
+        var names = typeof(SchoolAdmission.Business.AppException).Assembly
             .GetReferencedAssemblies().Select(a => a.Name!).ToList();
 
         Assert.DoesNotContain("SchoolAdmission.DataAccess", names);

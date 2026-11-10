@@ -1,4 +1,4 @@
-namespace SchoolAdmission.Business.Errors;
+namespace SchoolAdmission.Business;
 
 public sealed class AppException(ErrorKind kind, string code, string message) : Exception(message)
 {

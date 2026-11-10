@@ -85,7 +85,9 @@ public sealed class DatabaseMigrator
         }
         catch (Exception ex)
         {
-            // Closing the connection also releases the lock, so a failed unlock is not fatal.
+            // The explicit unlock is what releases the lock. With pooling, closing only returns the physical
+            // connection to the pool, and Npgsql resets session state (DISCARD ALL) on the next use, not at close.
+            // A failed unlock usually means a dead connection, and the server drops its lock, so it is not fatal.
             _logger.LogWarning(ex, "Releasing the migration advisory lock failed.");
         }
     }

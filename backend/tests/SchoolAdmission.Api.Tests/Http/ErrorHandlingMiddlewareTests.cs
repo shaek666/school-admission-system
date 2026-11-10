@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging.Abstractions;
 using SchoolAdmission.Api.Http;
 using SchoolAdmission.Business;
-using SchoolAdmission.Business.Errors;
 
 namespace SchoolAdmission.Api.Tests.Http;
 
@@ -90,12 +89,21 @@ public class ErrorHandlingMiddlewareTests
         Assert.False(context.Response.Headers.ContainsKey("Retry-After"));
     }
 
-    [Theory]
-    [InlineData(typeof(JsonException))]
-    [InlineData(typeof(BadHttpRequestException))]
-    public async Task Bad_json_gives_400_invalid_json(Type type)
+    [Fact]
+    public async Task Bad_json_gives_400_invalid_json()
     {
-        var thrown = (Exception)Activator.CreateInstance(type, SecretText)!;
+        var context = await RunAsync(new JsonException(SecretText));
+
+        Assert.Equal(400, context.Response.StatusCode);
+        var (code, message) = ReadError(context);
+        Assert.Equal("INVALID_JSON", code);
+        Assert.DoesNotContain(SecretText, message);
+    }
+
+    [Fact]
+    public async Task Bad_request_with_inner_json_exception_gives_400_invalid_json()
+    {
+        var thrown = new BadHttpRequestException(SecretText, StatusCodes.Status400BadRequest, new JsonException(SecretText));
 
         var context = await RunAsync(thrown);
 
@@ -103,6 +111,44 @@ public class ErrorHandlingMiddlewareTests
         var (code, message) = ReadError(context);
         Assert.Equal("INVALID_JSON", code);
         Assert.DoesNotContain(SecretText, message);
+    }
+
+    [Fact]
+    public async Task Bad_request_about_the_body_gives_400_invalid_json()
+    {
+        var thrown = new BadHttpRequestException("Required parameter \"Request body\" was not provided from body.");
+
+        var context = await RunAsync(thrown);
+
+        Assert.Equal(400, context.Response.StatusCode);
+        Assert.Equal("INVALID_JSON", ReadError(context).Code);
+    }
+
+    [Fact]
+    public async Task Bad_request_with_413_keeps_its_status_and_is_not_invalid_json()
+    {
+        var thrown = new BadHttpRequestException(SecretText, StatusCodes.Status413PayloadTooLarge);
+
+        var context = await RunAsync(thrown);
+
+        Assert.Equal(413, context.Response.StatusCode);
+        var (code, message) = ReadError(context);
+        Assert.Equal("PAYLOAD_TOO_LARGE", code);
+        Assert.DoesNotContain(SecretText, message);
+    }
+
+    [Fact]
+    public async Task Bad_request_400_not_about_the_body_gives_bad_request()
+    {
+        // No JsonException inside and no body in the message (for example a missing query value),
+        // so it is a generic 400 and not a JSON problem.
+        var thrown = new BadHttpRequestException(
+            "Required parameter \"int page\" was not provided from query string.");
+
+        var context = await RunAsync(thrown);
+
+        Assert.Equal(400, context.Response.StatusCode);
+        Assert.Equal("BAD_REQUEST", ReadError(context).Code);
     }
 
     [Fact]

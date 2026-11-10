@@ -1,4 +1,4 @@
-namespace SchoolAdmission.Business.Errors;
+namespace SchoolAdmission.Business;
 
 /// <summary>The only way to create an <see cref="AppException"/>. Codes match the design status map.</summary>
 public static class Errors

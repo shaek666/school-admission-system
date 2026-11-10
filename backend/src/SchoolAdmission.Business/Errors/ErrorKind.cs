@@ -1,4 +1,4 @@
-namespace SchoolAdmission.Business.Errors;
+namespace SchoolAdmission.Business;
 
 public enum ErrorKind
 {

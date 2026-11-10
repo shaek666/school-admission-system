@@ -1,5 +1,9 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using SchoolAdmission.Api.Tests.Infrastructure;
 
 namespace SchoolAdmission.Api.Tests;
@@ -16,8 +20,10 @@ public class ErrorPipelineTests(PostgresFixture fixture)
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var code = doc.RootElement.GetProperty("error").GetProperty("code").GetString();
-        Assert.False(string.IsNullOrEmpty(code));
+        var error = doc.RootElement.GetProperty("error");
+        Assert.Equal("NOT_FOUND", error.GetProperty("code").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(error.GetProperty("message").GetString()));
+        Assert.StartsWith("application/json", response.Content.Headers.ContentType?.MediaType);
     }
 
     [Fact]
@@ -33,6 +39,10 @@ public class ErrorPipelineTests(PostgresFixture fixture)
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal("*", Assert.Single(response.Headers.GetValues("Access-Control-Allow-Origin")));
+        var methods = string.Join(",", response.Headers.GetValues("Access-Control-Allow-Methods"));
+        var headers = string.Join(",", response.Headers.GetValues("Access-Control-Allow-Headers"));
+        Assert.Contains("DELETE", methods, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("X-Student-Id", headers, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -46,5 +56,21 @@ public class ErrorPipelineTests(PostgresFixture fixture)
 
         var exposed = string.Join(",", response.Headers.GetValues("Access-Control-Expose-Headers"));
         Assert.Contains("Date", exposed);
+    }
+
+    [Fact]
+    public void Factory_runs_in_production_like_the_container()
+    {
+        var environment = fixture.Factory.Services.GetRequiredService<IHostEnvironment>();
+
+        Assert.True(environment.IsProduction());
+    }
+
+    [Fact]
+    public void Route_handler_throws_on_bad_request_in_every_environment()
+    {
+        var options = fixture.Factory.Services.GetRequiredService<IOptions<RouteHandlerOptions>>().Value;
+
+        Assert.True(options.ThrowOnBadRequest);
     }
 }

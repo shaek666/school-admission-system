@@ -14,17 +14,27 @@ public sealed class AppFactory : WebApplicationFactory<Program>
         ["EXPIRY_SWEEP_SECONDS"] = "3600",
     };
 
+    private bool _hostCreated;
+
     public static string ConnectionString { get; } =
         Environment.GetEnvironmentVariable("ConnectionStrings__Default") ?? DefaultConnectionString;
 
     public AppFactory WithSetting(string key, string value)
     {
+        if (_hostCreated)
+        {
+            throw new InvalidOperationException(
+                $"Cannot apply setting '{key}' because the test host is already created. Call WithSetting first.");
+        }
+
         _settings[key] = value;
         return this;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        _hostCreated = true;
+        builder.UseEnvironment("Production");
         foreach (var (key, value) in _settings)
         {
             builder.UseSetting(key, value);

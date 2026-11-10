@@ -1,6 +1,5 @@
 using System.Text.Json;
 using SchoolAdmission.Business;
-using SchoolAdmission.Business.Errors;
 
 namespace SchoolAdmission.Api.Http;
 
@@ -25,6 +24,13 @@ public sealed class ErrorHandlingMiddleware(
 
     private async Task HandleAsync(HttpContext context, Exception exception)
     {
+        if (exception is BadHttpRequestException badRequest && !IsBadBody(badRequest))
+        {
+            var (code, message) = StatusCodeBody.Describe(badRequest.StatusCode);
+            await ErrorBody.WriteAsync(context.Response, badRequest.StatusCode, code, message);
+            return;
+        }
+
         var appException = exception switch
         {
             AppException app => app,
@@ -48,6 +54,22 @@ public sealed class ErrorHandlingMiddleware(
         }
 
         await ErrorBody.WriteAsync(context.Response, StatusFor(appException.Kind), appException.Code, appException.Message);
+    }
+
+    /// <summary>
+    /// True when a BadHttpRequestException is a 400 about the request body: it wraps a JsonException, or its
+    /// framework message says the body could not be read or was not provided. Any other status or 400 is not.
+    /// </summary>
+    private static bool IsBadBody(BadHttpRequestException exception)
+    {
+        if (exception.InnerException is JsonException)
+        {
+            return true;
+        }
+
+        return exception.StatusCode == StatusCodes.Status400BadRequest
+            && (exception.Message.Contains("body", StringComparison.OrdinalIgnoreCase)
+                || exception.Message.Contains("request content", StringComparison.OrdinalIgnoreCase));
     }
 
     private static int StatusFor(ErrorKind kind) => kind switch

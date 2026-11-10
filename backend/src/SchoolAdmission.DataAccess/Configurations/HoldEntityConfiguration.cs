@@ -6,8 +6,6 @@ namespace SchoolAdmission.DataAccess.Configurations;
 
 internal sealed class HoldEntityConfiguration : IEntityTypeConfiguration<HoldEntity>
 {
-    public const string ActiveIndexName = "ux_holds_student_class_active";
-
     public void Configure(EntityTypeBuilder<HoldEntity> builder)
     {
         builder.ToTable("holds", table =>
@@ -31,7 +29,7 @@ internal sealed class HoldEntityConfiguration : IEntityTypeConfiguration<HoldEnt
 
         builder.HasIndex(h => new { h.StudentId, h.ClassId })
             .IsUnique()
-            .HasDatabaseName(ActiveIndexName)
+            .HasDatabaseName(DbNames.ActiveHoldIndex)
             .HasFilter("status IN ('HELD','CONFIRMED')");
     }
 }

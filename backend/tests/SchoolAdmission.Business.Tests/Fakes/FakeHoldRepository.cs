@@ -17,6 +17,15 @@ public sealed class FakeHoldRepository(CallLog log) : IHoldRepository
         return Task.CompletedTask;
     }
 
+    /// <summary>What ExpireAllStaleAsync reports.</summary>
+    public int ExpireAllCount { get; set; }
+
+    public Task<int> ExpireAllStaleAsync(CancellationToken ct)
+    {
+        log.Add(CallLog.ExpireAll);
+        return Task.FromResult(ExpireAllCount);
+    }
+
     public Task<bool> HasActiveAsync(Guid classId, StudentId student, CancellationToken ct)
     {
         log.Add(CallLog.HasActive);

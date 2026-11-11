@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SchoolAdmission.Api;
+using SchoolAdmission.Api.Background;
 using SchoolAdmission.Api.Endpoints;
 using SchoolAdmission.Api.Http;
 using SchoolAdmission.Business;
@@ -36,6 +37,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<HoldOptions>>().Value);
 builder.Services.AddScoped<HoldService>();
 builder.Services.AddSingleton<DatabaseMigrator>();
+builder.Services.AddHostedService<HoldExpiryService>();
 builder.Services.AddSingleton<IExceptionTranslator, PostgresExceptionTranslator>();
 // Binding failures throw BadHttpRequestException in every environment (the default is Development only),
 // so the error middleware answers them with a 400 body instead of an empty one.

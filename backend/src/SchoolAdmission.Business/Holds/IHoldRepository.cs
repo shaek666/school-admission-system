@@ -7,6 +7,12 @@ public interface IHoldRepository
     /// <summary>Marks this student's HELD holds in the class with expires_at in the past as EXPIRED.</summary>
     Task ExpireStaleForStudentAsync(Guid classId, StudentId student, CancellationToken ct);
 
+    /// <summary>
+    /// Marks every HELD hold past its expiry (by database time) as EXPIRED, in one statement. Returns the number of rows changed.
+    /// Reads already derive EXPIRED, so this only tidies the stored status.
+    /// </summary>
+    Task<int> ExpireAllStaleAsync(CancellationToken ct);
+
     /// <summary>True when the student has a live hold in the class: CONFIRMED, or HELD and not yet expired.</summary>
     Task<bool> HasActiveAsync(Guid classId, StudentId student, CancellationToken ct);
 

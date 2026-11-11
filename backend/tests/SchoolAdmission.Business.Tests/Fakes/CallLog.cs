@@ -6,6 +6,7 @@ public sealed class CallLog
     public const string Begin = "Begin";
     public const string Lock = "Lock";
     public const string ExpireStale = "ExpireStale";
+    public const string ExpireAll = "ExpireAll";
     public const string HasActive = "HasActive";
     public const string CountActive = "CountActive";
     public const string Insert = "Insert";

@@ -8,34 +8,7 @@ namespace SchoolAdmission.Api.Tests.Concurrency;
 [Collection(ConcurrencyCollection.Name)]
 public class HoldConcurrencyTests
 {
-    private const string HeldCount = "select count(*) from holds where class_id = $1 and status = 'HELD'";
-    private static readonly TimeSpan RaceTimeout = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan LockTestTimeout = TimeSpan.FromSeconds(30);
-
-    private static async Task<HttpStatusCode[]> RaceAsync(HttpClient client, string classId, IReadOnlyList<string> studentIds,
-        Dictionary<string, int>? errorCodes = null)
-    {
-        var tasks = studentIds.Select(async studentId =>
-        {
-            using var response = await TestData.SendAsync(client, HttpMethod.Post, $"/classes/{classId}/holds", studentId);
-            var code = response.IsSuccessStatusCode ? null : await HttpJson.ErrorCodeAsync(response);
-            return (response.StatusCode, code);
-        }).ToArray();
-
-        var results = await Task.WhenAll(tasks).WaitAsync(RaceTimeout);
-        if (errorCodes is not null)
-        {
-            foreach (var code in results.Select(r => r.code).OfType<string>())
-            {
-                errorCodes[code] = errorCodes.GetValueOrDefault(code) + 1;
-            }
-        }
-
-        return results.Select(r => r.StatusCode).ToArray();
-    }
-
-    private static List<string> NewStudents(int count) =>
-        Enumerable.Range(0, count).Select(_ => TestData.NewStudentId()).ToList();
 
     [Fact]
     public async Task Two_hundred_parallel_holds_on_10_seats()
@@ -43,15 +16,13 @@ public class HoldConcurrencyTests
         using var factory = new AppFactory();
         using var client = factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 10);
-        var codes = new Dictionary<string, int>();
 
-        var statuses = await RaceAsync(client, classId, NewStudents(200), codes);
+        var results = await HoldRace.RunAsync([client], classId, HoldRace.NewStudents(200));
 
-        Assert.Equal(10, statuses.Count(s => s == HttpStatusCode.Created));
-        Assert.Equal(190, statuses.Count(s => s == HttpStatusCode.Conflict));
-        Assert.Equal(190, codes["NO_SEATS_AVAILABLE"]);
-        Assert.Single(codes);
-        Assert.Equal(10L, await Sql.ScalarAsync<long>(HeldCount, Guid.Parse(classId)));
+        Assert.Equal(10, results.Count(r => r.Status == HttpStatusCode.Created));
+        Assert.Equal(190, results.Count(r => r.Status == HttpStatusCode.Conflict));
+        Assert.Equal(190, results.Count(r => r.Code == "NO_SEATS_AVAILABLE"));
+        Assert.Equal(10L, await Sql.ScalarAsync<long>(HoldRace.HeldCountSql, Guid.Parse(classId)));
     }
 
     [Fact]
@@ -60,15 +31,14 @@ public class HoldConcurrencyTests
         using var factory = new AppFactory();
         using var client = factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 10);
-        var codes = new Dictionary<string, int>();
         var studentId = TestData.NewStudentId();
 
-        var statuses = await RaceAsync(client, classId, Enumerable.Repeat(studentId, 20).ToList(), codes);
+        var results = await HoldRace.RunAsync([client], classId, Enumerable.Repeat(studentId, 20).ToList());
 
-        Assert.Equal(1, statuses.Count(s => s == HttpStatusCode.Created));
-        Assert.Equal(19, statuses.Count(s => s == HttpStatusCode.Conflict));
-        Assert.Equal(19, codes["ALREADY_APPLIED"]);
-        Assert.Equal(1L, await Sql.ScalarAsync<long>(HeldCount, Guid.Parse(classId)));
+        Assert.Equal(1, results.Count(r => r.Status == HttpStatusCode.Created));
+        Assert.Equal(19, results.Count(r => r.Status == HttpStatusCode.Conflict));
+        Assert.Equal(19, results.Count(r => r.Code == "ALREADY_APPLIED"));
+        Assert.Equal(1L, await Sql.ScalarAsync<long>(HoldRace.HeldCountSql, Guid.Parse(classId)));
     }
 
     [Fact]
@@ -78,12 +48,13 @@ public class HoldConcurrencyTests
         using var client = factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 50);
 
-        var statuses = await RaceAsync(client, classId, NewStudents(1000));
+        var results = await HoldRace.RunAsync([client], classId, HoldRace.NewStudents(1000));
 
-        Assert.All(statuses, s => Assert.True(s is HttpStatusCode.Created or HttpStatusCode.Conflict, $"Unexpected status {s}"));
-        Assert.Equal(50, statuses.Count(s => s == HttpStatusCode.Created));
-        Assert.Equal(950, statuses.Count(s => s == HttpStatusCode.Conflict));
-        Assert.Equal(50L, await Sql.ScalarAsync<long>(HeldCount, Guid.Parse(classId)));
+        Assert.All(results, r => Assert.True(r.Status is HttpStatusCode.Created or HttpStatusCode.Conflict, $"Unexpected status {r.Status}"));
+        Assert.Equal(50, results.Count(r => r.Status == HttpStatusCode.Created));
+        Assert.Equal(950, results.Count(r => r.Status == HttpStatusCode.Conflict));
+        Assert.Equal(950, results.Count(r => r.Code == "NO_SEATS_AVAILABLE"));
+        Assert.Equal(50L, await Sql.ScalarAsync<long>(HoldRace.HeldCountSql, Guid.Parse(classId)));
     }
 
     [Fact]
@@ -153,6 +124,6 @@ public class HoldConcurrencyTests
             await transaction.RollbackAsync();
         }
 
-        Assert.Equal(0L, await Sql.ScalarAsync<long>(HeldCount, Guid.Parse(classId)));
+        Assert.Equal(0L, await Sql.ScalarAsync<long>(HoldRace.HeldCountSql, Guid.Parse(classId)));
     }
 }

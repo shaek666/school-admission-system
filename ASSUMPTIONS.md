@@ -37,3 +37,11 @@ The brief does not cover every case. This file lists each assumption and the rea
 
 - Expiry is enforced at read time by database time. The background job only tidies the stored status, so correctness never depends on it.
 - `EXPIRY_SWEEP_SECONDS` must be a whole number from 1 to 86400 (one day). A longer period has no use, and the startup check rejects it with the key name.
+
+## Two instances
+
+- Every hold request locks the class row with `SELECT ... FOR UPDATE` before it counts seats. The lock lives in Postgres, so requests from both processes wait in one queue.
+- The partial unique index `ux_holds_student_class_active` allows one active hold per student and class, whichever process inserts it.
+- Expiry uses database time, so the two processes never disagree on the clock.
+- The automated tests run two hosts in one process, with one connection pool. They prove the database rules only. The `multi` demo (`docker compose --profile multi up --build`) runs two real processes, on ports 8080 and 8081.
+- The frontend talks to the backend on port 8080 only. Send requests to port 8081 with curl to use the second process.

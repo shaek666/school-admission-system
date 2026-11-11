@@ -14,7 +14,8 @@ services:
       retries: 30
     restart: unless-stopped
 
-  backend:
+  backend: &backend
+    image: school-admission-backend
     build:
       context: ./backend
       target: runtime
@@ -28,6 +29,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  # A second backend process on the same database. Start it with: docker compose --profile multi up --build
+  backend-2:
+    <<: *backend
+    profiles: [multi]
+    ports:
+      - "8081:8080"
 
   backend-tests:
     build:

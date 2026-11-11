@@ -17,34 +17,12 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (!this.state.failed) return this.props.children
     return (
-      <div
-        role="alert"
-        style={{
-          maxWidth: '32rem',
-          margin: 'var(--space-xl) auto',
-          padding: 'var(--space-lg)',
-          background: 'var(--color-surface)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius)',
-        }}
-      >
+      <div role="alert" className="card" style={{ maxWidth: '32rem', margin: 'var(--space-xl) auto' }}>
         <h1 style={{ marginTop: 0, fontSize: 'var(--font-size-lg)' }}>Something went wrong</h1>
         <p style={{ color: 'var(--color-text-muted)' }}>
           The page could not be shown. Please reload to try again.
         </p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          style={{
-            padding: 'var(--space-sm) var(--space-md)',
-            background: 'var(--color-accent)',
-            color: 'var(--color-accent-text)',
-            border: 0,
-            borderRadius: 'var(--radius)',
-            fontSize: 'var(--font-size-md)',
-            cursor: 'pointer',
-          }}
-        >
+        <button type="button" className="btn" onClick={() => window.location.reload()}>
           Reload page
         </button>
       </div>

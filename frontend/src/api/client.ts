@@ -15,7 +15,7 @@ export class ApiError extends Error {
 
 export type ApiInit = RequestInit & { studentId?: string }
 
-const STUDENT_HEADER = 'X-Student-Id'
+export const STUDENT_HEADER = 'X-Student-Id'
 
 function buildInit({ studentId, headers, ...rest }: ApiInit): RequestInit {
   const merged = new Headers(headers)
@@ -47,13 +47,13 @@ export async function apiFetch<T>(path: string, init: ApiInit = {}): Promise<T> 
   try {
     response = await fetch(`${getApiBaseUrl()}${path}`, buildInit(init))
   } catch (error) {
-    // A cancelled request (unmount, superseded query) is not a server outage.
-    if (init.signal?.aborted) throw error
+    // fetch rejects with TypeError only for network failures. Anything else
+    // (an AbortError from a cancelled request) is not a server outage.
+    if (!(error instanceof TypeError)) throw error
     throw new ApiError('NETWORK', 0, 'The admission server cannot be reached.')
   }
   recordServerDate(response.headers.get('Date'))
 
-  if (response.status === 204) return undefined as T
   const text = await response.text()
   if (!response.ok) throw toApiError(response.status, text)
   return (text === '' ? undefined : JSON.parse(text)) as T

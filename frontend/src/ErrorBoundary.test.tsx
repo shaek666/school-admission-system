@@ -8,7 +8,10 @@ function Boom(): never {
 }
 
 describe('ErrorBoundary', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
 
   it('renders children when nothing throws', () => {
     render(<ErrorBoundary><p>fine</p></ErrorBoundary>)
@@ -23,6 +26,5 @@ describe('ErrorBoundary', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/something went wrong/i)
     await userEvent.click(screen.getByRole('button', { name: /reload/i }))
     expect(reload).toHaveBeenCalledOnce()
-    vi.unstubAllGlobals()
   })
 })

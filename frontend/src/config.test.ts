@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { getApiBaseUrl } from './config'
+import { DEFAULT_API_BASE_URL, getApiBaseUrl } from './config'
 
-const DEFAULT_URL = 'http://localhost:8080'
 
 describe('getApiBaseUrl', () => {
   afterEach(() => {
@@ -14,14 +13,14 @@ describe('getApiBaseUrl', () => {
   })
 
   it('falls back to the default without APP_CONFIG', () => {
-    expect(getApiBaseUrl()).toBe(DEFAULT_URL)
+    expect(getApiBaseUrl()).toBe(DEFAULT_API_BASE_URL)
   })
 
   it('falls back when apiBaseUrl is missing or empty', () => {
     window.APP_CONFIG = {}
-    expect(getApiBaseUrl()).toBe(DEFAULT_URL)
+    expect(getApiBaseUrl()).toBe(DEFAULT_API_BASE_URL)
     window.APP_CONFIG = { apiBaseUrl: '' }
-    expect(getApiBaseUrl()).toBe(DEFAULT_URL)
+    expect(getApiBaseUrl()).toBe(DEFAULT_API_BASE_URL)
   })
 
   it('strips one trailing slash', () => {

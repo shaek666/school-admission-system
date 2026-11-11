@@ -1,4 +1,4 @@
-const MESSAGES: Readonly<Record<string, string>> = {
+const MESSAGES: ReadonlyMap<string, string> = new Map(Object.entries({
   ALREADY_APPLIED: 'You already applied to this class. Your application is below.',
   BAD_REQUEST: 'That request was not valid. Please check what you entered and try again.',
   CLASS_NOT_FOUND: 'We could not find that class. It may have been removed.',
@@ -19,10 +19,10 @@ const MESSAGES: Readonly<Record<string, string>> = {
   UNSUPPORTED_MEDIA_TYPE: 'We could not accept that kind of request. Please try again.',
   VALIDATION_ERROR: 'Some of the details are not valid. Please check them and try again.',
   NETWORK: 'The admission server cannot be reached. Please check your connection and try again.',
-}
+}))
 
 const FALLBACK = 'Something unexpected happened. Please try again.'
 
 export function messageFor(code: string): string {
-  return Object.hasOwn(MESSAGES, code) ? MESSAGES[code]! : FALLBACK
+  return MESSAGES.get(code) ?? FALLBACK
 }

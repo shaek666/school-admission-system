@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, apiFetch } from './client'
+import { ApiError, apiFetch, STUDENT_HEADER } from './client'
 import { resetClock, serverNow } from './clock'
 
 const fetchMock = vi.fn()
@@ -83,7 +83,7 @@ describe('apiFetch', () => {
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
     fetchMock.mockResolvedValue(json({}, { headers: { Date: 'Thu, 01 Jan 2026 00:00:30 GMT' } }))
     await apiFetch('/holds', { studentId: '12345678901234567' })
-    expect(sentHeaders(0).get('X-Student-Id')).toBe('12345678901234567')
+    expect(sentHeaders(0).get(STUDENT_HEADER)).toBe('12345678901234567')
     expect(serverNow()).toBe(Date.parse('2026-01-01T00:00:30Z'))
   })
 
@@ -114,6 +114,6 @@ describe('apiFetch', () => {
     await apiFetch('/x')
     const bare = sentHeaders(1)
     expect(bare.has('Content-Type')).toBe(false)
-    expect(bare.has('X-Student-Id')).toBe(false)
+    expect(bare.has(STUDENT_HEADER)).toBe(false)
   })
 })

@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch, ApiError } from './client.ts'
 
@@ -61,33 +62,71 @@ export function useMyHolds(studentId: string | null) {
   })
 }
 
-function useInvalidateAll() {
+export function useInvalidateAll() {
   const queryClient = useQueryClient()
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: CLASSES_KEY }),
-      queryClient.invalidateQueries({ queryKey: ['myHolds'] }),
-    ])
+  return useCallback(
+    () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: CLASSES_KEY }),
+        queryClient.invalidateQueries({ queryKey: ['myHolds'] }),
+      ]),
+    [queryClient],
+  )
+}
+
+// Invalidation is fire-and-forget: TanStack v5 awaits a returned onSettled promise,
+// which would delay the caller's mutate callbacks until the refetch finishes.
+function useInvalidatingMutation<TData, TVariables>(
+  mutationFn: (variables: TVariables) => Promise<TData>,
+  onSuccess?: (queryClient: QueryClient, variables: TVariables) => void,
+) {
+  const queryClient = useQueryClient()
+  const invalidateAll = useInvalidateAll()
+  return useMutation({
+    mutationFn,
+    onSuccess: (_data, variables) => onSuccess?.(queryClient, variables),
+    onSettled: () => {
+      void invalidateAll()
+    },
+  })
 }
 
 export function useCreateClass() {
-  const invalidateAll = useInvalidateAll()
-  return useMutation({
-    mutationFn: (body: { name: string; totalSeats: number }) =>
-      apiFetch<ClassResponse>('/classes', { method: 'POST', body: JSON.stringify(body) }),
-    onSettled: () => {
-      void invalidateAll()
-    },
-  })
+  return useInvalidatingMutation((body: { name: string; totalSeats: number }) =>
+    apiFetch<ClassResponse>('/classes', { method: 'POST', body: JSON.stringify(body) }),
+  )
 }
 
 export function useApply() {
-  const invalidateAll = useInvalidateAll()
-  return useMutation({
-    mutationFn: ({ classId, studentId }: { classId: string; studentId: string }) =>
-      apiFetch<HoldCreatedResponse>(`/classes/${encodeURIComponent(classId)}/holds`, { method: 'POST', studentId }),
-    onSettled: () => {
-      void invalidateAll()
-    },
-  })
+  return useInvalidatingMutation(({ classId, studentId }: { classId: string; studentId: string }) =>
+    apiFetch<HoldCreatedResponse>(`/classes/${encodeURIComponent(classId)}/holds`, { method: 'POST', studentId }),
+  )
+}
+
+type ConfirmResponse = { holdId: string; status: string }
+
+type HoldAction = { holdId: string; studentId: string }
+
+// Until the refetch returns, the cached card would still read HELD with live buttons,
+// so a second click would send a second request. Reflect the outcome immediately.
+function setCachedStatus(queryClient: QueryClient, { holdId, studentId }: HoldAction, status: string): void {
+  queryClient.setQueryData<MyHoldResponse[]>(myHoldsKey(studentId), (holds) =>
+    holds?.map((hold) => (hold.holdId === holdId ? { ...hold, status } : hold)),
+  )
+}
+
+export function useConfirm() {
+  return useInvalidatingMutation(
+    ({ holdId, studentId }: HoldAction) =>
+      apiFetch<ConfirmResponse>(`/holds/${encodeURIComponent(holdId)}/confirm`, { method: 'POST', studentId }),
+    (queryClient, action) => setCachedStatus(queryClient, action, 'CONFIRMED'),
+  )
+}
+
+export function useCancel() {
+  return useInvalidatingMutation(
+    ({ holdId, studentId }: HoldAction) =>
+      apiFetch<void>(`/holds/${encodeURIComponent(holdId)}`, { method: 'DELETE', studentId }),
+    (queryClient, action) => setCachedStatus(queryClient, action, 'CANCELLED'),
+  )
 }

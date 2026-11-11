@@ -1,6 +1,7 @@
-import { Container, SimpleGrid } from '@mantine/core'
+import { Container, SimpleGrid, Stack } from '@mantine/core'
 import { CreateClassForm } from './features/admin/CreateClassForm.tsx'
 import { ClassList } from './features/classes/ClassList.tsx'
+import { MyApplications } from './features/holds/MyApplications.tsx'
 import { StudentBar } from './features/student/StudentBar.tsx'
 
 export default function App() {
@@ -11,10 +12,13 @@ export default function App() {
         <StudentBar />
       </header>
       <Container size="lg" py="lg">
-        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-          <CreateClassForm />
-          <ClassList />
-        </SimpleGrid>
+        <Stack gap="lg">
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+            <CreateClassForm />
+            <ClassList />
+          </SimpleGrid>
+          <MyApplications />
+        </Stack>
       </Container>
     </>
   )

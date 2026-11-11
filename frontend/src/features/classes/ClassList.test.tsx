@@ -1,7 +1,11 @@
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { messageFor } from '../../messages.ts'
+import { notifyInfo } from '../../notify.ts'
+import { json, useFetchStub } from '../../test-fetch.ts'
 import { renderWithProviders } from '../../test-utils.tsx'
+import { MyApplications } from '../holds/MyApplications.tsx'
 import { STUDENT_ID_KEY } from '../student/useStudentId.ts'
 import { ClassList, NO_STUDENT_HINT } from './ClassList.tsx'
 
@@ -10,20 +14,14 @@ const VALID_ID = '12345678901234567'
 const open = { id: 'c1', name: 'Class One', totalSeats: 10, heldSeats: 2, confirmedSeats: 3, availableSeats: 5 }
 const full = { id: 'c2', name: 'Class Two', totalSeats: 4, heldSeats: 1, confirmedSeats: 3, availableSeats: 0 }
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
-}
+vi.mock('../../notify.ts', () => ({ notifyError: vi.fn(), notifyInfo: vi.fn(), notifySuccess: vi.fn() }))
 
 describe('ClassList', () => {
-  const fetchMock = vi.fn()
+  const fetchMock = useFetchStub()
 
   beforeEach(() => {
     window.localStorage.clear()
-    fetchMock.mockReset()
-    vi.stubGlobal('fetch', fetchMock)
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
+    vi.mocked(notifyInfo).mockClear()
   })
 
   it('shows a disabled Full button when no seats are available', async () => {
@@ -96,5 +94,30 @@ describe('ClassList', () => {
     expect(await screen.findByRole('progressbar', { name: 'Confirmed seats in Class One' })).toBeInTheDocument()
     expect(screen.getByRole('progressbar', { name: 'Seats on hold in Class One' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Apply to Class One' })).toHaveAccessibleDescription(NO_STUDENT_HINT)
+  })
+
+  it('tells the guardian about ALREADY_APPLIED when no application card is visible', async () => {
+    window.localStorage.setItem(STUDENT_ID_KEY, VALID_ID)
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return Promise.resolve(json({ error: { code: 'ALREADY_APPLIED', message: 'x' } }, 409))
+      return Promise.resolve(json(url.endsWith('/classes') ? [open] : []))
+    })
+    renderWithProviders(<ClassList />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Apply to Class One' }))
+    await waitFor(() => expect(notifyInfo).toHaveBeenCalledWith('Already applied', messageFor('ALREADY_APPLIED')))
+  })
+
+  it('only highlights, without a notification, when the cached applications hold an active hold for the class', async () => {
+    window.localStorage.setItem(STUDENT_ID_KEY, VALID_ID)
+    const mine = { holdId: 'h1', classId: 'c1', className: 'Class One', status: 'HELD', expiresAt: new Date(Date.now() + 600_000).toISOString() }
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return Promise.resolve(json({ error: { code: 'ALREADY_APPLIED', message: 'x' } }, 409))
+      return Promise.resolve(json(url.endsWith('/classes') ? [open] : [mine]))
+    })
+    renderWithProviders(<><ClassList /><MyApplications /></>)
+    await screen.findByText('HELD')
+    await userEvent.click(await screen.findByRole('button', { name: 'Apply to Class One' }))
+    expect(await screen.findByText(messageFor('ALREADY_APPLIED'))).toBeInTheDocument()
+    expect(notifyInfo).not.toHaveBeenCalled()
   })
 })

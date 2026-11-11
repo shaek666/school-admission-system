@@ -1,10 +1,15 @@
-import { Alert, Button, Group, Loader, Paper, Progress, Stack, Text, Title } from '@mantine/core'
+import { Button, Group, Paper, Progress, Stack, Text } from '@mantine/core'
+import { useQueryClient } from '@tanstack/react-query'
 import { errorCode } from '../../api/client.ts'
-import { useApply, useClasses, type ClassResponse } from '../../api/queries.ts'
+import { myHoldsKey, useApply, useClasses, type ClassResponse, type MyHoldResponse } from '../../api/queries.ts'
+import { QuerySection } from '../../components/QuerySection.tsx'
 import { messageFor } from '../../messages.ts'
 import { notifyError, notifyInfo } from '../../notify.ts'
+import { highlightClass } from '../holds/highlight.ts'
 import { useStudentId } from '../student/useStudentId.ts'
 import { applyOutcome } from './applyOutcome.ts'
+
+const ACTIVE_STATUSES: ReadonlySet<string> = new Set(['HELD', 'CONFIRMED'])
 
 const NO_STUDENT_HINT_ID = 'no-student-hint'
 export const NO_STUDENT_HINT = "Enter the student's 17-digit number above to apply."
@@ -64,6 +69,7 @@ export function ClassList() {
   const [studentId] = useStudentId()
   const classes = useClasses()
   const apply = useApply()
+  const queryClient = useQueryClient()
 
   const onApply = (classId: string) => {
     if (studentId === null || apply.isPending) return
@@ -74,7 +80,13 @@ export function ClassList() {
           const code = errorCode(error)
           const message = messageFor(code)
           const outcome = applyOutcome(code)
-          if (outcome === 'highlight-existing') notifyInfo('Already applied', message)
+          if (outcome === 'highlight-existing') {
+            highlightClass(classId)
+            // The highlighted card explains itself; only tell the guardian if no such card is cached.
+            const cached = queryClient.getQueryData<MyHoldResponse[]>(myHoldsKey(studentId))
+            const cardShown = cached?.some((hold) => hold.classId === classId && ACTIVE_STATUSES.has(hold.status))
+            if (!cardShown) notifyInfo('Already applied', message)
+          }
           else if (outcome === 'refresh-classes') notifyInfo('Class is full', message)
           else notifyError('Could not apply', message)
         },
@@ -83,39 +95,26 @@ export function ClassList() {
   }
 
   return (
-    <Paper withBorder p="lg" component="section" aria-labelledby="guardian-title">
-      <Stack>
-        <Title order={2} size="h3" id="guardian-title">Guardian: classes</Title>
-        {studentId === null && <Text size="sm" c="dimmed" id={NO_STUDENT_HINT_ID}>{NO_STUDENT_HINT}</Text>}
-        {classes.isPending && <Loader size="sm" aria-label="Loading classes" />}
-        {classes.isError && (
-          <Alert color="red" title="Could not load classes">
-            <Stack gap="xs" align="flex-start">
-              <Text size="sm">
-                {messageFor(errorCode(classes.error))}
-              </Text>
-              <Button size="xs" variant="default" loading={classes.isFetching} onClick={() => void classes.refetch()}>
-                Retry
-              </Button>
-            </Stack>
-          </Alert>
-        )}
-        {classes.data?.length === 0 && <Text>No classes yet.</Text>}
-        {classes.data && classes.data.length > 0 && (
-          <Stack component="ul" p={0} m={0}>
-            {classes.data.map((item) => (
-              <ClassCard
-                key={item.id}
-                item={item}
-                canApply={studentId !== null}
-                applyingId={apply.isPending ? apply.variables.classId : null}
-                isApplying={apply.isPending}
-                onApply={onApply}
-              />
-            ))}
-          </Stack>
-        )}
-      </Stack>
-    </Paper>
+    <QuerySection
+      titleId="guardian-title"
+      title="Guardian: classes"
+      hint={studentId === null && <Text size="sm" c="dimmed" id={NO_STUDENT_HINT_ID}>{NO_STUDENT_HINT}</Text>}
+      loading={classes.isPending}
+      loadingLabel="Loading classes"
+      errorTitle="Could not load classes"
+      emptyText="No classes yet."
+      query={classes}
+      items={classes.data}
+      renderItem={(item) => (
+        <ClassCard
+          key={item.id}
+          item={item}
+          canApply={studentId !== null}
+          applyingId={apply.isPending ? apply.variables.classId : null}
+          isApplying={apply.isPending}
+          onApply={onApply}
+        />
+      )}
+    />
   )
 }

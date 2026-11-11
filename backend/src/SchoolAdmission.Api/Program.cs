@@ -2,8 +2,10 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SchoolAdmission.Api;
+using SchoolAdmission.Api.Endpoints;
 using SchoolAdmission.Api.Http;
 using SchoolAdmission.Business;
+using SchoolAdmission.Business.Classes;
 using SchoolAdmission.DataAccess;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,6 +26,8 @@ builder.Services.AddOptions<DataAccessOptions>()
 builder.Services.AddDbContext<AdmissionDbContext>(options => options
     .UseNpgsql(connectionString, npgsql => npgsql.CommandTimeout(DataAccessOptions.CommandTimeoutSeconds))
     .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
+builder.Services.AddScoped<IClassRepository, ClassRepository>();
+builder.Services.AddScoped<ClassService>();
 builder.Services.AddSingleton<DatabaseMigrator>();
 builder.Services.AddSingleton<IExceptionTranslator, PostgresExceptionTranslator>();
 // Binding failures throw BadHttpRequestException in every environment (the default is Development only),
@@ -48,6 +52,7 @@ app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseStatusCodePages(StatusCodeBody.WriteAsync);
 app.UseCors();
 app.UseRouting();
+app.MapClassEndpoints();
 
 app.Run();
 

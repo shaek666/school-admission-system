@@ -32,3 +32,8 @@ The brief does not cover every case. This file lists each assumption and the rea
 - Each hold keeps the expiry it was given. A new `HOLD_DURATION_SECONDS` applies only to new holds.
 - The hold time starts when the insert runs, by database time (`statement_timestamp()`). A wait for the class lock never shortens a hold. Every expiry check uses the same clock.
 - Confirm takes the same class row lock as a create. A confirm that commits just after expiry can therefore never race a new hold for the same seat.
+
+## Expiry
+
+- Expiry is enforced at read time by database time. The background job only tidies the stored status, so correctness never depends on it.
+- `EXPIRY_SWEEP_SECONDS` must be a whole number from 1 to 86400 (one day). A longer period has no use, and the startup check rejects it with the key name.

@@ -43,6 +43,18 @@ public sealed class HoldService(
         return hold;
     }
 
+    /// <summary>Stores EXPIRED on stale HELD holds. One UPDATE is atomic, so no transaction. Reads never depend on it.</summary>
+    public async Task<int> ExpireStaleAsync(CancellationToken ct)
+    {
+        var count = await holds.ExpireAllStaleAsync(ct);
+        if (count > 0)
+        {
+            logger.LogInformation("Sweep stored EXPIRED on {Count} stale holds", count);
+        }
+
+        return count;
+    }
+
     public async Task<HoldRecord> GetAsync(string holdId, CancellationToken ct)
     {
         if (!Ids.TryParse(holdId, out var id))

@@ -30,10 +30,16 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
     }
 
 
-    private const string ExpireStaleSql = $$"""
+    // The sweep. The per-student version below adds a filter to the same statement.
+    private const string ExpireAllStaleSql = $$"""
         UPDATE holds {{HoldSql.Alias}}
         SET status = '{{HoldStatus.Expired}}'
-        WHERE {{HoldSql.Alias}}.class_id = {0} AND {{HoldSql.Alias}}.student_id = {1} AND {{HoldSql.IsStaleHeld}}
+        WHERE {{HoldSql.IsStaleHeld}}
+        """;
+
+    private const string ExpireStaleSql = ExpireAllStaleSql + $$"""
+
+          AND {{HoldSql.Alias}}.class_id = {0} AND {{HoldSql.Alias}}.student_id = {1}
         """;
 
     private const string HasActiveSql = $$"""
@@ -101,6 +107,9 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
 
     public async Task ExpireStaleForStudentAsync(Guid classId, StudentId student, CancellationToken ct) =>
         await context.Database.ExecuteSqlRawAsync(ExpireStaleSql, [classId, student.Value], ct);
+
+    public async Task<int> ExpireAllStaleAsync(CancellationToken ct) =>
+        await context.Database.ExecuteSqlRawAsync(ExpireAllStaleSql, ct);
 
     public async Task<bool> HasActiveAsync(Guid classId, StudentId student, CancellationToken ct)
     {

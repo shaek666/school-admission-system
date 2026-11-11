@@ -3,13 +3,14 @@ namespace SchoolAdmission.Business.Classes;
 public sealed class ClassService(IClassRepository repository)
 {
     private const int MaxNameLength = 200;
+    private const int GuidLength = 36;
     private const int MinSeats = 1;
     private const int MaxSeats = 100_000;
 
     public async Task<ClassSeats> CreateAsync(CreateClassRequest request, CancellationToken ct)
     {
         var name = request.Name?.Trim();
-        if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength)
+        if (string.IsNullOrEmpty(name) || name.Any(char.IsControl) || name.EnumerateRunes().Count() > MaxNameLength)
             throw Errors.Validation($"name must be 1 to {MaxNameLength} characters.");
 
         if (request.TotalSeats is not (>= MinSeats and <= MaxSeats and var seats))
@@ -22,7 +23,8 @@ public sealed class ClassService(IClassRepository repository)
 
     public async Task<ClassSeats> GetAsync(string id, CancellationToken ct)
     {
-        if (!Guid.TryParse(id, out var classId))
+        // TryParseExact trims surrounding white space, so the length is checked too.
+        if (id.Length != GuidLength || !Guid.TryParseExact(id, "D", out var classId))
             throw Errors.ClassNotFound();
 
         return await repository.GetAsync(classId, ct) ?? throw Errors.ClassNotFound();

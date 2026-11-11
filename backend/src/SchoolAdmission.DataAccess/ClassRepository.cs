@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using SchoolAdmission.Business.Classes;
+using SchoolAdmission.Business.Holds;
 using SchoolAdmission.DataAccess.Entities;
 
 namespace SchoolAdmission.DataAccess;
@@ -8,17 +9,17 @@ namespace SchoolAdmission.DataAccess;
 public sealed class ClassRepository(AdmissionDbContext context) : IClassRepository
 {
     // Seat counts use the database clock, so an expired hold frees its seat before the sweep runs.
-    private sealed class SeatRow
+    private sealed record SeatRow
     {
-        public Guid Id { get; set; }
+        public Guid Id { get; init; }
 
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
 
-        public int TotalSeats { get; set; }
+        public int TotalSeats { get; init; }
 
-        public int HeldSeats { get; set; }
+        public int HeldSeats { get; init; }
 
-        public int ConfirmedSeats { get; set; }
+        public int ConfirmedSeats { get; init; }
 
         public ClassSeats ToSeats() => new(Id, Name, TotalSeats, HeldSeats, ConfirmedSeats);
     }
@@ -30,6 +31,7 @@ public sealed class ClassRepository(AdmissionDbContext context) : IClassReposito
         return new ClassSeats(id, name, totalSeats, 0, 0);
     }
 
+    // SeatSelect must not contain '{' or '}' because it becomes a composite format string.
     // Only live holds are joined, so expired and cancelled rows are never grouped.
     private const string SeatSelect = $"""
         SELECT c.id AS "Id", c.name AS "Name", c.total_seats AS "TotalSeats",

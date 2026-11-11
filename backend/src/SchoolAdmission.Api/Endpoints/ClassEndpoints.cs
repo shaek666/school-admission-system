@@ -7,8 +7,11 @@ public static class ClassEndpoints
 {
     public static IEndpointRouteBuilder MapClassEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/classes", async (CreateClassRequest request, ClassService service, CancellationToken ct) =>
-            Results.Json(ClassResponse.From(await service.CreateAsync(request, ct)), statusCode: StatusCodes.Status201Created));
+        app.MapPost("/classes", async (HttpRequest http, ClassService service, CancellationToken ct) =>
+        {
+            var request = await JsonBody.ReadAsync<CreateClassRequest>(http, ct);
+            return Results.Json(ClassResponse.From(await service.CreateAsync(request, ct)), statusCode: StatusCodes.Status201Created);
+        });
 
         app.MapGet("/classes", async (ClassService service, CancellationToken ct) =>
             (await service.ListAsync(ct)).Select(ClassResponse.From).ToList());

@@ -81,11 +81,9 @@ public class ErrorHandlingMiddlewareTests
     public static TheoryData<Exception, int, string> BadRequests => new()
     {
         { new JsonException(SecretText), 500, "INTERNAL_ERROR" },
-        { new BadHttpRequestException(SecretText, StatusCodes.Status400BadRequest, new JsonException(SecretText)), 400, "INVALID_JSON" },
-        { new BadHttpRequestException("Required parameter \"Request body\" was not provided from body."), 400, "INVALID_JSON" },
+        { new BadHttpRequestException(SecretText, StatusCodes.Status400BadRequest, new JsonException(SecretText)), 400, "BAD_REQUEST" },
+        { new BadHttpRequestException(SecretText, StatusCodes.Status415UnsupportedMediaType), 415, "UNSUPPORTED_MEDIA_TYPE" },
         { new BadHttpRequestException(SecretText, StatusCodes.Status413PayloadTooLarge), 413, "PAYLOAD_TOO_LARGE" },
-        // No JsonException inside and no body in the message (for example a missing query value),
-        // so it is a generic 400 and not a JSON problem.
         { new BadHttpRequestException("Required parameter \"int page\" was not provided from query string."), 400, "BAD_REQUEST" },
     };
 

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -31,8 +33,10 @@ builder.Services.AddScoped<ClassService>();
 builder.Services.AddSingleton<DatabaseMigrator>();
 builder.Services.AddSingleton<IExceptionTranslator, PostgresExceptionTranslator>();
 // Binding failures throw BadHttpRequestException in every environment (the default is Development only),
-// so the error middleware answers them with INVALID_JSON instead of an empty 400.
+// so the error middleware answers them with a 400 body instead of an empty one.
 builder.Services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
+// Strict numbers: a JSON string such as "7" is not accepted where a number is expected.
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.NumberHandling = JsonNumberHandling.Strict);
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
     .AllowAnyOrigin()
     .AllowAnyHeader()

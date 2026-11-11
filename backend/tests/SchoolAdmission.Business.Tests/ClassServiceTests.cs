@@ -40,12 +40,17 @@ public class ClassServiceTests
         { "Class 6", 0 },
         { "Class 6", -1 },
         { "Class 6", 100001 },
+        { "Class\0 6", 10 },
+        { "Class\n6", 10 },
+        { new string('a', 3) + "\u0000", 10 },
+        { string.Concat(Enumerable.Repeat("😀", 201)), 10 },
     };
 
     public static TheoryData<string, int> AcceptedInputs => new()
     {
         { new string('a', 200), 10 },
         { " " + new string('a', 200) + " ", 10 },
+        { string.Concat(Enumerable.Repeat("😀", 200)), 10 },
         { "Class 6", 1 },
         { "Class 6", 100000 },
         { "ষষ্ঠ শ্রেণি - প্রভাতী", 40 },
@@ -76,13 +81,31 @@ public class ClassServiceTests
         Assert.Equal(created, found);
     }
 
-    [Theory, InlineData("not-a-guid"), InlineData(""), InlineData("00000000-0000-0000-0000-000000000001")]
+    [Theory, InlineData("not-a-guid"), InlineData(""), InlineData("\0"), InlineData("..\\/.."), InlineData("00000000-0000-0000-0000-000000000001")]
     public async Task Get_throws_not_found_for_malformed_or_unknown_id(string id)
     {
         var ex = await Assert.ThrowsAsync<AppException>(() => _service.GetAsync(id, Ct));
 
         Assert.Equal(ErrorKind.NotFound, ex.Kind);
         Assert.Equal("CLASS_NOT_FOUND", ex.Code);
+    }
+
+    [Fact]
+    public async Task Get_accepts_only_the_dashed_guid_form()
+    {
+        var created = await _service.CreateAsync(new CreateClassRequest("Class 6", 30), Ct);
+        string[] spellings =
+        [
+            created.Id.ToString("N"),
+            created.Id.ToString("B"),
+            $" {created.Id:D} ",
+        ];
+
+        foreach (var spelling in spellings)
+        {
+            var ex = await Assert.ThrowsAsync<AppException>(() => _service.GetAsync(spelling, Ct));
+            Assert.Equal("CLASS_NOT_FOUND", ex.Code);
+        }
     }
 
     [Fact]

@@ -35,6 +35,7 @@ public class TwoHostTests
         foreach (var client in new[] { clientA, clientB })
         {
             using var response = await client.GetAsync($"/classes/{classId}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             var body = await HttpJson.ReadJsonAsync(response);
             Assert.Equal(Seats, body.GetProperty("heldSeats").GetInt32());
             Assert.Equal(0, body.GetProperty("availableSeats").GetInt32());
@@ -43,5 +44,22 @@ public class TwoHostTests
         Assert.Equal(
             (long)Seats,
             await Sql.ScalarAsync<long>(HoldRace.HeldCountSql, Guid.Parse(classId)));
+    }
+
+    [Fact]
+    public async Task Same_student_on_two_hosts_gets_one_hold()
+    {
+        using var hostA = new AppFactory();
+        using var hostB = new AppFactory();
+        using var clientA = hostA.CreateClient();
+        using var clientB = hostB.CreateClient();
+        var classId = await TestData.CreateClassAsync(clientA, Seats);
+        var studentId = TestData.NewStudentId();
+
+        var results = await HoldRace.RunAsync([clientA, clientB], classId, Enumerable.Repeat(studentId, 20).ToList());
+
+        Assert.Equal(1, results.Count(r => r.Status == HttpStatusCode.Created));
+        Assert.Equal(19, results.Count(r => r.Status == HttpStatusCode.Conflict && r.Code == "ALREADY_APPLIED"));
+        Assert.Equal(1L, await Sql.ScalarAsync<long>(HoldRace.HeldCountSql, Guid.Parse(classId)));
     }
 }

@@ -48,11 +48,12 @@ public class HoldConcurrencyTests
         using var client = factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 50);
 
-        var statuses = (await HoldRace.RunAsync([client], classId, HoldRace.NewStudents(1000))).Select(r => r.Status).ToList();
+        var results = await HoldRace.RunAsync([client], classId, HoldRace.NewStudents(1000));
 
-        Assert.All(statuses, s => Assert.True(s is HttpStatusCode.Created or HttpStatusCode.Conflict, $"Unexpected status {s}"));
-        Assert.Equal(50, statuses.Count(s => s == HttpStatusCode.Created));
-        Assert.Equal(950, statuses.Count(s => s == HttpStatusCode.Conflict));
+        Assert.All(results, r => Assert.True(r.Status is HttpStatusCode.Created or HttpStatusCode.Conflict, $"Unexpected status {r.Status}"));
+        Assert.Equal(50, results.Count(r => r.Status == HttpStatusCode.Created));
+        Assert.Equal(950, results.Count(r => r.Status == HttpStatusCode.Conflict));
+        Assert.Equal(950, results.Count(r => r.Code == "NO_SEATS_AVAILABLE"));
         Assert.Equal(50L, await Sql.ScalarAsync<long>(HoldRace.HeldCountSql, Guid.Parse(classId)));
     }
 

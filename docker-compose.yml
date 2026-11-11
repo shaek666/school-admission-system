@@ -15,6 +15,7 @@ services:
     restart: unless-stopped
 
   backend: &backend
+    image: school-admission-backend
     build:
       context: ./backend
       target: runtime
@@ -29,7 +30,7 @@ services:
       postgres:
         condition: service_healthy
 
-  # A second backend process on the same database. Start it with: docker compose --profile multi up
+  # A second backend process on the same database. Start it with: docker compose --profile multi up --build
   backend-2:
     <<: *backend
     profiles: [multi]

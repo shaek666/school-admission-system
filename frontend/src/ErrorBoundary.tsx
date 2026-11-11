@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { Component, type ReactNode } from 'react'
 
 type Props = { children: ReactNode }
 type State = { failed: boolean }
@@ -6,13 +6,11 @@ type State = { failed: boolean }
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { failed: false }
 
+  // React 19 already logs caught render errors (createRoot onCaughtError).
   static getDerivedStateFromError(): State {
     return { failed: true }
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error('Render error caught by ErrorBoundary', error, info.componentStack)
-  }
 
   render(): ReactNode {
     if (!this.state.failed) return this.props.children

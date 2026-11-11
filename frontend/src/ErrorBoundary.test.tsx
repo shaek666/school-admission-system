@@ -19,6 +19,8 @@ describe('ErrorBoundary', () => {
   })
 
   it('shows the fallback with a reload button when a child throws', async () => {
+    // The previous test's tree must be unmounted (RTL cleanup is wired in test-setup.ts).
+    expect(screen.queryByText('fine')).toBeNull()
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const reload = vi.fn()
     vi.stubGlobal('location', { ...window.location, reload })

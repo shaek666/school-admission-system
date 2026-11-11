@@ -73,18 +73,13 @@ describe('apiFetch', () => {
     await expect(apiFetch('/x')).rejects.toMatchObject({ code: 'REQUEST_ERROR', status: 500 })
   })
 
-  it('surfaces invalid JSON on a 2xx', async () => {
-    fetchMock.mockResolvedValue(new Response('{nope', { status: 200 }))
-    await expect(apiFetch('/x')).rejects.toBeInstanceOf(SyntaxError)
-  })
-
   it('sends the student header and records the Date header', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
     fetchMock.mockResolvedValue(json({}, { headers: { Date: 'Thu, 01 Jan 2026 00:00:30 GMT' } }))
     await apiFetch('/holds', { studentId: '12345678901234567' })
     expect(sentHeaders(0).get(STUDENT_HEADER)).toBe('12345678901234567')
-    expect(serverNow()).toBe(Date.parse('2026-01-01T00:00:30Z'))
+    expect(serverNow()).toBe(Date.parse('2026-01-01T00:00:30Z') + 500)
   })
 
   it('records the Date header on error responses too', async () => {
@@ -97,7 +92,7 @@ describe('apiFetch', () => {
       }),
     )
     await apiFetch('/x').catch(() => undefined)
-    expect(serverNow()).toBe(Date.parse('2026-01-01T00:00:30Z'))
+    expect(serverNow()).toBe(Date.parse('2026-01-01T00:00:30Z') + 500)
   })
 
   it('sets Content-Type only with a body and does not mutate the caller init', async () => {
@@ -115,5 +110,32 @@ describe('apiFetch', () => {
     const bare = sentHeaders(1)
     expect(bare.has('Content-Type')).toBe(false)
     expect(bare.has(STUDENT_HEADER)).toBe(false)
+  })
+
+  it('rejects a bad header value without calling it a network failure', async () => {
+    const result = apiFetch('/x', { studentId: 'bad\nvalue' })
+    await expect(result).rejects.not.toMatchObject({ code: 'NETWORK' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('maps an unreadable 2xx body to REQUEST_ERROR', async () => {
+    fetchMock.mockResolvedValue(new Response('<!doctype html>', { status: 200 }))
+    await expect(apiFetch('/x')).rejects.toMatchObject({ code: 'REQUEST_ERROR', status: 200 })
+  })
+
+  it('maps a connection lost mid-body to NETWORK', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      text: () => Promise.reject(new TypeError('terminated')),
+    })
+    await expect(apiFetch('/x')).rejects.toMatchObject({ code: 'NETWORK', status: 0 })
+  })
+
+  it('keeps a Content-Type the caller set', async () => {
+    fetchMock.mockResolvedValue(json({}))
+    await apiFetch('/x', { method: 'POST', body: 'x', headers: { 'Content-Type': 'text/plain' } })
+    expect(sentHeaders(0).get('Content-Type')).toBe('text/plain')
   })
 })

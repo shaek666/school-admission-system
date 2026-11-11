@@ -1,4 +1,3 @@
-using System.Text.Json;
 using SchoolAdmission.Business;
 
 namespace SchoolAdmission.Api.Http;
@@ -35,7 +34,7 @@ public sealed class ErrorHandlingMiddleware(
             context.Response.Headers[name] = value;
         }
 
-        if (exception is BadHttpRequestException badRequest && !IsBadBody(badRequest))
+        if (exception is BadHttpRequestException badRequest)
         {
             var (code, message) = StatusCodeBody.Describe(badRequest.StatusCode);
             await ErrorBody.WriteAsync(context.Response, badRequest.StatusCode, code, message);
@@ -45,9 +44,6 @@ public sealed class ErrorHandlingMiddleware(
         var appException = exception switch
         {
             AppException app => app,
-            // With ThrowOnBadRequest, a bad request body always arrives wrapped in BadHttpRequestException.
-            // A bare JsonException comes from the server (for example response serialization), so it is a 500.
-            BadHttpRequestException => Errors.InvalidJson(),
             _ => translator.Translate(exception)
         };
 
@@ -70,24 +66,6 @@ public sealed class ErrorHandlingMiddleware(
         }
 
         await ErrorBody.WriteAsync(context.Response, StatusFor(appException.Kind), appException.Code, appException.Message);
-    }
-
-    /// <summary>
-    /// True when a BadHttpRequestException is a 400 about the request body: it wraps a JsonException, or its
-    /// framework message says the body could not be read or was not provided. Any other status or 400 is not.
-    /// Stopgap: it matches ASP.NET message text. Replace it with source-side body binding when the first
-    /// body endpoint lands (Task 7/8).
-    /// </summary>
-    private static bool IsBadBody(BadHttpRequestException exception)
-    {
-        if (exception.InnerException is JsonException)
-        {
-            return true;
-        }
-
-        return exception.StatusCode == StatusCodes.Status400BadRequest
-            && (exception.Message.Contains("body", StringComparison.OrdinalIgnoreCase)
-                || exception.Message.Contains("request content", StringComparison.OrdinalIgnoreCase));
     }
 
     private static int StatusFor(ErrorKind kind) => kind switch

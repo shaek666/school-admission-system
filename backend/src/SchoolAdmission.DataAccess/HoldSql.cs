@@ -9,10 +9,10 @@ internal static class HoldSql
     public const string Alias = "h";
 
     /// <summary>HELD and not yet expired by database time. Only such a hold can be confirmed or cancelled.</summary>
-    public const string IsOpenHeld = $"({Alias}.status = '{HoldStatus.Held}' AND {Alias}.expires_at > now())";
+    public const string IsOpenHeld = $"({Alias}.status = '{HoldStatus.Held}' AND {Alias}.expires_at > statement_timestamp())";
 
     /// <summary>HELD but past its expiry by database time. The complement of <see cref="IsOpenHeld"/> among HELD rows.</summary>
-    public const string IsStaleHeld = $"({Alias}.status = '{HoldStatus.Held}' AND {Alias}.expires_at <= now())";
+    public const string IsStaleHeld = $"({Alias}.status = '{HoldStatus.Held}' AND {Alias}.expires_at <= statement_timestamp())";
 
     /// <summary>CONFIRMED, or HELD and not yet expired by database time.</summary>
     public const string IsLive = $"({Alias}.status = '{HoldStatus.Confirmed}' OR {IsOpenHeld})";

@@ -5,7 +5,8 @@ using SchoolAdmission.Business.Students;
 namespace SchoolAdmission.DataAccess;
 
 /// <summary>
-/// Raw SQL on the context's open transaction. Every time comparison uses the database now().
+/// Raw SQL on the context's open transaction. Every time comparison uses the database statement_timestamp(): the time the statement started,
+/// not the transaction, so a wait for the class lock never shortens or kills a hold.
 /// Placeholders {0}, {1} are bound as parameters by EF, so no value is ever concatenated into the SQL.
 /// </summary>
 public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
@@ -28,10 +29,6 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
             new(Id, ClassId, ClassName, StudentId, Status, DateTime.SpecifyKind(ExpiresAtUtc, DateTimeKind.Utc));
     }
 
-    private sealed record Scalar<T>
-    {
-        public T Value { get; init; } = default!;
-    }
 
     private const string ExpireStaleSql = $$"""
         UPDATE holds {{HoldSql.Alias}}
@@ -58,7 +55,7 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
         WITH inserted AS (
             INSERT INTO holds (id, class_id, student_id, status, expires_at, created_at)
             VALUES (gen_random_uuid(), {0}, {1}, '{{HoldStatus.Held}}',
-                    date_trunc('second', now()) + make_interval(secs => {2}::double precision), now())
+                    date_trunc('second', statement_timestamp()) + make_interval(secs => {2}::double precision), statement_timestamp())
             RETURNING id, class_id, student_id, status, expires_at
         )
         SELECT {{HoldSql.Alias}}.id AS "Id", {{HoldSql.Alias}}.class_id AS "ClassId", c.name AS "ClassName",
@@ -66,6 +63,14 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
                {{HoldSql.Alias}}.expires_at AS "ExpiresAtUtc"
         FROM inserted {{HoldSql.Alias}}
         JOIN classes c ON c.id = {{HoldSql.Alias}}.class_id
+        """;
+
+    private const string LockClassSql = $$"""
+        SELECT c.total_seats AS "Value"
+        FROM classes c
+        JOIN holds {{HoldSql.Alias}} ON {{HoldSql.Alias}}.class_id = c.id
+        WHERE {{HoldSql.Alias}}.id = {0}
+        FOR UPDATE OF c
         """;
 
     // Moves an open HELD hold owned by the student to the status in {2}. Confirm and cancel share it.
@@ -100,17 +105,17 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
     public async Task<bool> HasActiveAsync(Guid classId, StudentId student, CancellationToken ct)
     {
         var rows = await context.Database
-            .SqlQueryRaw<Scalar<bool>>(HasActiveSql, classId, student.Value)
+            .SqlQueryRaw<bool>(HasActiveSql, classId, student.Value)
             .ToListAsync(ct);
-        return rows.Single().Value;
+        return rows.Single();
     }
 
     public async Task<int> CountActiveAsync(Guid classId, CancellationToken ct)
     {
         var rows = await context.Database
-            .SqlQueryRaw<Scalar<int>>(CountActiveSql, classId)
+            .SqlQueryRaw<int>(CountActiveSql, classId)
             .ToListAsync(ct);
-        return rows.Single().Value;
+        return rows.Single();
     }
 
     public async Task<HoldRecord> InsertAsync(Guid classId, StudentId student, int durationSeconds, CancellationToken ct)
@@ -119,6 +124,15 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
             .SqlQueryRaw<HoldRow>(InsertSql, classId, student.Value, durationSeconds)
             .ToListAsync(ct);
         return rows.Single().ToRecord();
+    }
+
+    public async Task<bool> LockClassAsync(Guid holdId, CancellationToken ct)
+    {
+        // FOR UPDATE OF c locks only the class row, the same row a create locks, so the two are ordered.
+        var rows = await context.Database
+            .SqlQueryRaw<int>(LockClassSql, holdId)
+            .ToListAsync(ct);
+        return rows.Count == 1;
     }
 
     public Task<bool> TryConfirmAsync(Guid id, StudentId student, CancellationToken ct) =>

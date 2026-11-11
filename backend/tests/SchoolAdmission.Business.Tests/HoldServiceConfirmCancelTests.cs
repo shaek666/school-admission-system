@@ -49,6 +49,28 @@ public class HoldServiceConfirmCancelTests
     }
 
     [Fact]
+    public async Task Confirm_locks_the_class_row_before_the_update()
+    {
+        // Without the lock, a confirm that commits after expiry can race a create that already counted
+        // the hold as expired, and the class oversells.
+        _holds.UpdateMatches = true;
+        Store(HoldStatus.Confirmed);
+
+        await _service.ConfirmAsync(HoldId, Owner, Ct);
+
+        Assert.Equal(
+            [CallLog.Begin, CallLog.Lock, CallLog.TryConfirm, CallLog.Get, CallLog.Commit, CallLog.Dispose],
+            _log.Entries);
+    }
+
+    [Fact]
+    public async Task Confirm_of_a_missing_hold_stops_at_the_lock()
+    {
+        await AssertCodeAsync(() => _service.ConfirmAsync(HoldId, Owner, Ct), "HOLD_NOT_FOUND");
+        Assert.Equal(0, _log.Count(CallLog.TryConfirm));
+    }
+
+    [Fact]
     public async Task Confirm_matching_update_commits_without_the_table()
     {
         _holds.UpdateMatches = true;

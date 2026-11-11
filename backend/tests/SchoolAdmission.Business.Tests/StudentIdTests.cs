@@ -40,6 +40,13 @@ public class StudentIdTests
     }
 
     [Fact]
+    public void Default_id_masks_fully_instead_of_throwing()
+    {
+        Assert.Equal(new string('*', 17), default(StudentId).Masked);
+        Assert.Equal(new string('*', 17), default(StudentId).ToString());
+    }
+
+    [Fact]
     public void ToString_and_interpolation_print_masked_value()
     {
         StudentId.TryParse("20152691234567890", out var id);

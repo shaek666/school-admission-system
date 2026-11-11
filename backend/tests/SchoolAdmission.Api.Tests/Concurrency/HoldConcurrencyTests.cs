@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using Npgsql;
 using SchoolAdmission.Api.Tests.Infrastructure;
@@ -83,6 +84,42 @@ public class HoldConcurrencyTests
         Assert.Equal(50, statuses.Count(s => s == HttpStatusCode.Created));
         Assert.Equal(950, statuses.Count(s => s == HttpStatusCode.Conflict));
         Assert.Equal(50L, await Sql.ScalarAsync<long>(HeldCount, Guid.Parse(classId)));
+    }
+
+    [Fact]
+    public async Task Hold_created_after_a_lock_wait_expires_after_the_wait()
+    {
+        // The hold time starts when the insert runs, not when the transaction began. With now(), a request
+        // that waited longer than HOLD_DURATION_SECONDS for the class lock got a hold that was already dead.
+        using var factory = new AppFactory().WithSetting("HOLD_DURATION_SECONDS", "1");
+        using var client = factory.CreateClient();
+        var classId = await TestData.CreateClassAsync(client, 5);
+
+        await using var blocker = new NpgsqlConnection(AppFactory.ConnectionString);
+        await blocker.OpenAsync();
+        await using var transaction = await blocker.BeginTransactionAsync();
+        await using (var lockCommand = new NpgsqlCommand("select id from classes where id = @id for update", blocker, transaction))
+        {
+            lockCommand.Parameters.AddWithValue("id", Guid.Parse(classId));
+            await lockCommand.ExecuteScalarAsync();
+        }
+
+        var pending = TestData.SendAsync(client, HttpMethod.Post, $"/classes/{classId}/holds", TestData.NewStudentId());
+        await Task.Delay(TimeSpan.FromSeconds(2.5));
+        DateTime releasedAt;
+        await using (var clock = new NpgsqlCommand("select clock_timestamp()", blocker, transaction))
+        {
+            releasedAt = ((DateTime)(await clock.ExecuteScalarAsync())!).ToUniversalTime();
+        }
+
+        await transaction.RollbackAsync();
+        using var response = await pending.WaitAsync(LockTestTimeout);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await HttpJson.ReadJsonAsync(response);
+        Assert.Equal("HELD", body.GetProperty("status").GetString());
+        var expiresAt = DateTimeOffset.Parse(body.GetProperty("expiresAt").GetString()!, CultureInfo.InvariantCulture);
+        Assert.True(expiresAt.UtcDateTime > releasedAt, $"expiresAt {expiresAt:O} is not after the lock release {releasedAt:O}");
     }
 
     [Fact]

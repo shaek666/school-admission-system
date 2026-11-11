@@ -25,8 +25,6 @@ internal sealed class HoldEntityConfiguration : IEntityTypeConfiguration<HoldEnt
             .HasConstraintName("fk_holds_classes_class_id")
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(h => h.ClassId).HasDatabaseName("ix_holds_class_id");
-
         builder.HasIndex(h => new { h.StudentId, h.CreatedAt })
             .IsDescending(false, true)
             .HasDatabaseName(DbNames.StudentCreatedIndex);

@@ -16,6 +16,12 @@ public interface IHoldRepository
     /// <summary>Inserts a HELD hold that expires after <paramref name="durationSeconds"/>, by database time.</summary>
     Task<HoldRecord> InsertAsync(Guid classId, StudentId student, int durationSeconds, CancellationToken ct);
 
+    /// <summary>
+    /// Locks the row of the class this hold belongs to (the same lock a create takes) until the open
+    /// transaction ends. False when the hold does not exist. Call it inside an <see cref="IUnitOfWork"/> transaction.
+    /// </summary>
+    Task<bool> LockClassAsync(Guid holdId, CancellationToken ct);
+
     /// <summary>Moves the student's unexpired HELD hold to CONFIRMED. False when no row matched.</summary>
     Task<bool> TryConfirmAsync(Guid id, StudentId student, CancellationToken ct);
 

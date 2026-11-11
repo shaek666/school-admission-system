@@ -58,14 +58,21 @@ public sealed class HoldService(
 
     public async Task<HoldRecord> ConfirmAsync(string holdId, StudentId student, CancellationToken ct)
     {
-        // The conditional UPDATE is the whole decision when it matches. Either way, read the hold in the
+        // Under the class lock, the conditional UPDATE is the whole decision when it matches. Either way, read the hold in the
         // same transaction: it is the response body on success, and the input to the state rules on a miss.
         if (!Ids.TryParse(holdId, out var id))
         {
             throw Errors.HoldNotFound();
         }
 
+        // Lock the class row first, as a create does. Otherwise a confirm that commits just after expiry
+        // can race a create that already counted this hold as expired, and the class oversells.
         await using var tx = await unitOfWork.BeginAsync(ct);
+        if (!await holds.LockClassAsync(id, ct))
+        {
+            throw Errors.HoldNotFound();
+        }
+
         var matched = await holds.TryConfirmAsync(id, student, ct);
         var hold = await holds.GetAsync(id, ct) ?? throw Errors.HoldNotFound();
         if (matched)

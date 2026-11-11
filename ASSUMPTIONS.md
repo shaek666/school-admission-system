@@ -30,4 +30,5 @@ The brief does not cover every case. This file lists each assumption and the rea
 - There is no rate limiting. The row lock keeps seats safe, and a gateway owns rate limiting in production.
 - Under heavy load, requests queue for up to 60 seconds for a connection and 30 seconds for the class lock. Beyond that, the API returns 503 `SERVICE_BUSY` with `Retry-After`.
 - Each hold keeps the expiry it was given. A new `HOLD_DURATION_SECONDS` applies only to new holds.
-- The hold time starts when the hold transaction starts. A request that waited for the class lock gets a hold that is shorter by that wait.
+- The hold time starts when the insert runs, by database time (`statement_timestamp()`). A wait for the class lock never shortens a hold. Every expiry check uses the same clock.
+- Confirm takes the same class row lock as a create. A confirm that commits just after expiry can therefore never race a new hold for the same seat.

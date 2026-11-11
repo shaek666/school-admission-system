@@ -79,9 +79,6 @@ namespace SchoolAdmission.DataAccess.Migrations
                     b.HasKey("Id")
                         .HasName("pk_holds");
 
-                    b.HasIndex("ClassId")
-                        .HasDatabaseName("ix_holds_class_id");
-
                     b.HasIndex("ClassId", "Status")
                         .HasDatabaseName("ix_holds_class_status");
 

@@ -15,9 +15,15 @@ public sealed class ErrorHandlingMiddleware(
         {
             await next(context);
         }
-        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        catch (Exception ex) when (context.RequestAborted.IsCancellationRequested)
         {
-            // The client is gone, so there is nothing to log or write.
+            // The client is gone, so there is nothing to write. A cancellation is expected and not logged.
+            // Anything else (for example a broken Npgsql stream) is logged at Debug only.
+            if (ex is not OperationCanceledException)
+            {
+                logger.LogDebug(ex, "Request aborted by the client for {Method} {Path}",
+                    context.Request.Method, context.Request.Path);
+            }
         }
         catch (Exception ex) when (!context.RequestAborted.IsCancellationRequested && !context.Response.HasStarted)
         {

@@ -25,8 +25,10 @@ public readonly partial record struct StudentId(string Value)
         return false;
     }
 
-    /// <summary>All but the last 4 digits replaced by stars.</summary>
-    public string Masked => string.Concat(new string('*', Length - VisibleDigits), Value.AsSpan(Length - VisibleDigits));
+    /// <summary>All but the last 4 digits replaced by stars. An ID not built by TryParse (default) masks fully.</summary>
+    public string Masked => Value is { Length: Length }
+        ? string.Concat(new string('*', Length - VisibleDigits), Value.AsSpan(Length - VisibleDigits))
+        : new string('*', Length);
 
     public override string ToString() => Masked;
 }

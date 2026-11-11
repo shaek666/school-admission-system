@@ -44,6 +44,12 @@ public sealed class FakeHoldRepository(CallLog log) : IHoldRepository
     /// <summary>What the conditional UPDATEs report. Tests set it to true for the 1 row path.</summary>
     public bool UpdateMatches { get; set; }
 
+    public Task<bool> LockClassAsync(Guid holdId, CancellationToken ct)
+    {
+        log.Add(CallLog.Lock);
+        return Task.FromResult(Stored is not null);
+    }
+
     public Task<bool> TryConfirmAsync(Guid id, StudentId student, CancellationToken ct)
     {
         log.Add(CallLog.TryConfirm);

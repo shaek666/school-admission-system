@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, apiFetch, STUDENT_HEADER } from './client'
+import { ApiError, apiFetch, errorCode, STUDENT_HEADER } from './client'
 import { resetClock, serverNow } from './clock'
 
 const fetchMock = vi.fn()
@@ -137,5 +137,17 @@ describe('apiFetch', () => {
     fetchMock.mockResolvedValue(json({}))
     await apiFetch('/x', { method: 'POST', body: 'x', headers: { 'Content-Type': 'text/plain' } })
     expect(sentHeaders(0).get('Content-Type')).toBe('text/plain')
+  })
+})
+
+describe('errorCode', () => {
+  it('returns the code of an ApiError', () => {
+    expect(errorCode(new ApiError('NO_SEATS_AVAILABLE', 409, 'full'))).toBe('NO_SEATS_AVAILABLE')
+  })
+
+  it('falls back to REQUEST_ERROR for anything else', () => {
+    expect(errorCode(new Error('boom'))).toBe('REQUEST_ERROR')
+    expect(errorCode('boom')).toBe('REQUEST_ERROR')
+    expect(errorCode(undefined)).toBe('REQUEST_ERROR')
   })
 })

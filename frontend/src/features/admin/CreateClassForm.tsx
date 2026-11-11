@@ -1,7 +1,7 @@
 import { Button, NumberInput, Paper, Stack, TextInput, Title } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import { ApiError } from '../../api/client.ts'
+import { errorCode } from '../../api/client.ts'
 import { useCreateClass } from '../../api/queries.ts'
 import { messageFor } from '../../messages.ts'
 import { MAX_SEATS, MIN_SEATS, parseSeats, validateClassForm } from './classForm.ts'
@@ -9,9 +9,9 @@ import { MAX_SEATS, MIN_SEATS, parseSeats, validateClassForm } from './classForm
 export function CreateClassForm() {
   const createClass = useCreateClass()
   const form = useForm({
-    mode: 'controlled',
+    mode: 'uncontrolled',
     initialValues: { name: '', totalSeats: '' as number | string },
-    validate: (values) => validateClassForm(values),
+    validate: validateClassForm,
   })
 
   const submit = form.onSubmit((values) => {
@@ -25,7 +25,7 @@ export function CreateClassForm() {
           notifications.show({ color: 'green', title: 'Class created', message: `${created.name} is open for applications.` })
         },
         onError: (error) => {
-          const code = error instanceof ApiError ? error.code : 'REQUEST_ERROR'
+          const code = errorCode(error)
           notifications.show({ color: 'red', title: 'Could not create the class', message: messageFor(code) })
         },
       },
@@ -37,13 +37,14 @@ export function CreateClassForm() {
       <form onSubmit={submit} noValidate>
         <Stack>
           <Title order={2} size="h3" id="admin-title">School admin</Title>
-          <TextInput label="Class name" placeholder="Class Six, Section A" {...form.getInputProps('name')} />
+          <TextInput label="Class name" placeholder="Class Six, Section A" key={form.key('name')} {...form.getInputProps('name')} />
           <NumberInput
             label="Total seats"
             min={MIN_SEATS}
             max={MAX_SEATS}
             allowDecimal={false}
             allowNegative={false}
+            key={form.key('totalSeats')}
             {...form.getInputProps('totalSeats')}
           />
           <Button type="submit" loading={createClass.isPending}>

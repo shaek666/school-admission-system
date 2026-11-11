@@ -31,7 +31,7 @@ export const myHoldsKey = (studentId: string | null) => ['myHolds', studentId] a
 
 const CLASSES_REFETCH_MS = 3000
 const MY_HOLDS_REFETCH_MS = 5000
-const MAX_RETRIES = 2
+const MAX_RETRIES = 1
 
 // A 4xx answer will not change on retry; network and 5xx failures might.
 export function shouldRetry(failureCount: number, error: unknown): boolean {

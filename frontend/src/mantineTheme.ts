@@ -15,7 +15,7 @@ function mix(hex: string, amount: number): string {
   return `#${channels.map((c) => c.toString(16).padStart(2, '0')).join('')}`
 }
 
-export const accentShades = SHADE_MIX.map((amount) =>
+const accentShades = SHADE_MIX.map((amount) =>
   mix(theme.color.accent, amount),
 ) as unknown as MantineColorsTuple
 

@@ -1,4 +1,4 @@
-import { Container, SimpleGrid, Stack } from '@mantine/core'
+import { Container, SimpleGrid } from '@mantine/core'
 import { CreateClassForm } from './features/admin/CreateClassForm.tsx'
 import { ClassList } from './features/classes/ClassList.tsx'
 import { StudentBar } from './features/student/StudentBar.tsx'
@@ -12,12 +12,8 @@ export default function App() {
       </header>
       <Container size="lg" py="lg">
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-          <Stack>
-            <CreateClassForm />
-          </Stack>
-          <Stack>
-            <ClassList />
-          </Stack>
+          <CreateClassForm />
+          <ClassList />
         </SimpleGrid>
       </Container>
     </>

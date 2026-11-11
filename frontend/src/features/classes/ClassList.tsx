@@ -1,8 +1,7 @@
 import { Alert, Button, Group, Loader, Paper, Progress, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useQueryClient } from '@tanstack/react-query'
-import { ApiError } from '../../api/client.ts'
-import { CLASSES_KEY, useApply, useClasses, type ClassResponse } from '../../api/queries.ts'
+import { errorCode } from '../../api/client.ts'
+import { useApply, useClasses, type ClassResponse } from '../../api/queries.ts'
 import { messageFor } from '../../messages.ts'
 import { useStudentId } from '../student/useStudentId.ts'
 import { applyOutcome } from './applyOutcome.ts'
@@ -52,7 +51,6 @@ function ClassCard({ item, canApply, applyingId, onApply }: {
 
 export function ClassList() {
   const [studentId] = useStudentId()
-  const queryClient = useQueryClient()
   const classes = useClasses()
   const apply = useApply()
 
@@ -62,14 +60,13 @@ export function ClassList() {
       { classId, studentId },
       {
         onError: (error) => {
-          const code = error instanceof ApiError ? error.code : 'REQUEST_ERROR'
+          const code = errorCode(error)
           const message = messageFor(code)
           const outcome = applyOutcome(code)
           if (outcome === 'highlight-existing') {
             notifications.show({ color: 'blue', title: 'Already applied', message })
           } else if (outcome === 'refresh-classes') {
             notifications.show({ color: 'yellow', title: 'Class is full', message })
-            void queryClient.invalidateQueries({ queryKey: CLASSES_KEY })
           } else {
             notifications.show({ color: 'red', title: 'Could not apply', message })
           }
@@ -88,7 +85,7 @@ export function ClassList() {
           <Alert color="red" title="Could not load classes">
             <Stack gap="xs" align="flex-start">
               <Text size="sm">
-                {messageFor(classes.error instanceof ApiError ? classes.error.code : 'REQUEST_ERROR')}
+                {messageFor(errorCode(classes.error))}
               </Text>
               <Button size="xs" variant="default" loading={classes.isFetching} onClick={() => void classes.refetch()}>
                 Retry

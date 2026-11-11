@@ -13,6 +13,10 @@ export class ApiError extends Error {
   }
 }
 
+export function errorCode(error: unknown): string {
+  return error instanceof ApiError ? error.code : 'REQUEST_ERROR'
+}
+
 export type ApiInit = RequestInit & { studentId?: string }
 
 export const STUDENT_HEADER = 'X-Student-Id'

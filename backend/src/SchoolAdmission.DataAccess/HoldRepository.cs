@@ -30,16 +30,16 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
     }
 
 
-    private const string ExpireStaleSql = $$"""
-        UPDATE holds {{HoldSql.Alias}}
-        SET status = '{{HoldStatus.Expired}}'
-        WHERE {{HoldSql.Alias}}.class_id = {0} AND {{HoldSql.Alias}}.student_id = {1} AND {{HoldSql.IsStaleHeld}}
-        """;
-
+    // The sweep. The per-student version below adds a filter to the same statement.
     private const string ExpireAllStaleSql = $$"""
         UPDATE holds {{HoldSql.Alias}}
         SET status = '{{HoldStatus.Expired}}'
         WHERE {{HoldSql.IsStaleHeld}}
+        """;
+
+    private const string ExpireStaleSql = ExpireAllStaleSql + $$"""
+
+          AND {{HoldSql.Alias}}.class_id = {0} AND {{HoldSql.Alias}}.student_id = {1}
         """;
 
     private const string HasActiveSql = $$"""

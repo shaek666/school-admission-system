@@ -8,19 +8,24 @@ namespace SchoolAdmission.Api.Tests;
 public class ExpiryTests(PostgresFixture fixture)
 {
     private const int ClassSeats = 3;
-    private static readonly TimeSpan HoldDurationWait = TimeSpan.FromSeconds(2);
 
     private static async Task<JsonElement> SeatsAsync(HttpClient client, string classId) =>
         await HttpJson.ReadJsonAsync(await client.GetAsync($"/classes/{classId}"));
+
+    private static async Task<(string ClassId, string Student, string HoldId)> CreateExpiredHoldAsync(HttpClient client)
+    {
+        var classId = await TestData.CreateClassAsync(client, ClassSeats);
+        var student = TestData.NewStudentId();
+        var holdId = await TestData.CreateHoldAsync(client, classId, student);
+        await Sql.ExpireAsync(Guid.Parse(holdId));
+        return (classId, student, holdId);
+    }
 
     [Fact]
     public async Task Expired_hold_reads_EXPIRED_everywhere()
     {
         using var client = fixture.Factory.CreateClient();
-        var classId = await TestData.CreateClassAsync(client, ClassSeats);
-        var student = TestData.NewStudentId();
-        var holdId = await TestData.CreateHoldAsync(client, classId, student);
-        await Sql.ExpireAsync(Guid.Parse(holdId));
+        var (_, student, holdId) = await CreateExpiredHoldAsync(client);
 
         var single = await HttpJson.ReadJsonAsync(await TestData.SendAsync(client, HttpMethod.Get, $"/holds/{holdId}"));
         var mine = await HttpJson.ReadJsonAsync(await TestData.SendAsync(client, HttpMethod.Get, "/me/holds", student));
@@ -52,10 +57,7 @@ public class ExpiryTests(PostgresFixture fixture)
     public async Task Expired_student_can_apply_again()
     {
         using var client = fixture.Factory.CreateClient();
-        var classId = await TestData.CreateClassAsync(client, ClassSeats);
-        var student = TestData.NewStudentId();
-        var first = await TestData.CreateHoldAsync(client, classId, student);
-        await Sql.ExpireAsync(Guid.Parse(first));
+        var (classId, student, first) = await CreateExpiredHoldAsync(client);
 
         var second = await TestData.CreateHoldAsync(client, classId, student);
 
@@ -64,31 +66,15 @@ public class ExpiryTests(PostgresFixture fixture)
         Assert.Equal(1, seats.GetProperty("heldSeats").GetInt32());
     }
 
-    [Fact]
-    public async Task Confirm_expired_is_409_HOLD_EXPIRED()
+    [Theory]
+    [InlineData("POST", "/confirm")]
+    [InlineData("DELETE", "")]
+    public async Task Confirm_or_delete_expired_is_409_HOLD_EXPIRED(string method, string suffix)
     {
         using var client = fixture.Factory.CreateClient();
-        var classId = await TestData.CreateClassAsync(client, ClassSeats);
-        var student = TestData.NewStudentId();
-        var holdId = await TestData.CreateHoldAsync(client, classId, student);
-        await Sql.ExpireAsync(Guid.Parse(holdId));
+        var (_, student, holdId) = await CreateExpiredHoldAsync(client);
 
-        var response = await TestData.SendAsync(client, HttpMethod.Post, $"/holds/{holdId}/confirm", student);
-
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Equal("HOLD_EXPIRED", await HttpJson.ErrorCodeAsync(response));
-    }
-
-    [Fact]
-    public async Task Delete_expired_is_409_HOLD_EXPIRED()
-    {
-        using var client = fixture.Factory.CreateClient();
-        var classId = await TestData.CreateClassAsync(client, ClassSeats);
-        var student = TestData.NewStudentId();
-        var holdId = await TestData.CreateHoldAsync(client, classId, student);
-        await Sql.ExpireAsync(Guid.Parse(holdId));
-
-        var response = await TestData.SendAsync(client, HttpMethod.Delete, $"/holds/{holdId}", student);
+        var response = await TestData.SendAsync(client, new HttpMethod(method), $"/holds/{holdId}{suffix}", student);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("HOLD_EXPIRED", await HttpJson.ErrorCodeAsync(response));
@@ -102,9 +88,9 @@ public class ExpiryTests(PostgresFixture fixture)
         var classId = await TestData.CreateClassAsync(client, ClassSeats);
         var holdId = await TestData.CreateHoldAsync(client, classId, TestData.NewStudentId());
 
-        await Task.Delay(HoldDurationWait);
-
-        var root = await HttpJson.ReadJsonAsync(await client.GetAsync($"/holds/{holdId}"));
-        Assert.Equal("EXPIRED", root.GetProperty("status").GetString());
+        var seconds = await Sql.ScalarAsync<int>(
+            "select extract(epoch from expires_at - date_trunc('second', created_at))::int from holds where id = $1",
+            Guid.Parse(holdId));
+        Assert.Equal(1, seconds);
     }
 }

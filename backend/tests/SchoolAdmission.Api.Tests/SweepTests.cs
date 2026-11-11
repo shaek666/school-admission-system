@@ -12,11 +12,9 @@ public class SweepTests
 {
     private const int ClassSeats = 3;
     private static readonly TimeSpan SweepWait = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(200);
 
-    private const string StatusSql = "select status from holds where id = $1";
-
-    private static Task<string> StoredStatusAsync(string holdId) => Sql.ScalarAsync<string>(StatusSql, Guid.Parse(holdId));
+    private static Task<string> StoredStatusAsync(string holdId) =>
+        Sql.ScalarAsync<string>("select status from holds where id = $1", Guid.Parse(holdId));
 
     private static async Task<int> SweepAsync(AppFactory factory)
     {
@@ -68,11 +66,9 @@ public class SweepTests
         using var factory = new AppFactory().WithSetting("EXPIRY_SWEEP_SECONDS", "1");
         var (expired, live) = await CreateExpiredAndLiveAsync(factory);
 
-        using var cts = new CancellationTokenSource(SweepWait);
-        while (await StoredStatusAsync(expired) != "EXPIRED")
-        {
-            await Task.Delay(PollInterval, cts.Token);
-        }
+        var swept = await Wait.UntilAsync(async () => await StoredStatusAsync(expired) == "EXPIRED", SweepWait);
+
+        Assert.True(swept, $"Hold {expired} was not stored as EXPIRED within {SweepWait.TotalSeconds} s.");
 
         Assert.Equal("HELD", await StoredStatusAsync(live));
     }

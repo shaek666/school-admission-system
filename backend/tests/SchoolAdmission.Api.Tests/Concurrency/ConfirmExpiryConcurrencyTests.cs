@@ -8,21 +8,16 @@ public class ConfirmExpiryConcurrencyTests
 {
     private const int ParallelConfirms = 20;
     private static readonly TimeSpan ExpiryWait = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(200);
 
     private static async Task WaitUntilExpiredAsync(HttpClient client, string holdId)
     {
-        using var cts = new CancellationTokenSource(ExpiryWait);
-        while (true)
+        var expired = await Wait.UntilAsync(async () =>
         {
-            var root = await HttpJson.ReadJsonAsync(await client.GetAsync($"/holds/{holdId}", cts.Token));
-            if (root.GetProperty("status").GetString() == "EXPIRED")
-            {
-                return;
-            }
+            var root = await HttpJson.ReadJsonAsync(await client.GetAsync($"/holds/{holdId}"));
+            return root.GetProperty("status").GetString() == "EXPIRED";
+        }, ExpiryWait);
 
-            await Task.Delay(PollInterval, cts.Token);
-        }
+        Assert.True(expired, $"Hold {holdId} did not read EXPIRED within {ExpiryWait.TotalSeconds} s.");
     }
 
     private static async Task<(string HoldId, string StudentId)> ExpiredHoldAsync(HttpClient client)

@@ -18,29 +18,20 @@ public sealed class HoldExpiryService(
         {
             while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                await SweepOnceAsync(stoppingToken);
+                try
+                {
+                    using var scope = scopeFactory.CreateScope();
+                    await scope.ServiceProvider.GetRequiredService<HoldService>().ExpireStaleAsync(stoppingToken);
+                }
+                catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                {
+                    logger.LogWarning(ex, "Hold expiry sweep failed; retrying on the next tick");
+                }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             // Shutdown ends the loop quietly.
-        }
-    }
-
-    private async Task SweepOnceAsync(CancellationToken ct)
-    {
-        try
-        {
-            using var scope = scopeFactory.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<HoldService>().ExpireStaleAsync(ct);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Hold expiry sweep failed; retrying on the next tick");
         }
     }
 }

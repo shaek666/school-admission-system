@@ -13,3 +13,21 @@ The brief does not cover every case. This file lists each assumption and the rea
 - The database starts empty, with no seed data.
 - Errors use `{ "error": { "code", "message" } }`. Success bodies have no envelope.
 - `GET /classes/{classId}` returns the same shape as one item of `GET /classes`.
+
+## Holds
+
+- The API has no authentication. The brief identifies the student by the `X-Student-Id` header, so the API trusts that header. In production the student ID comes from a verified login, and a gateway adds rate limits.
+- The student ID must be exactly 17 ASCII digits. The server does not trim it. A missing, repeated or invalid header returns 400 `INVALID_STUDENT_ID`, before any 404.
+- Confirm and `DELETE` require `X-Student-Id`. Rule 4 says only the student's own hold can be confirmed, and it cannot hold without the header. Another student's hold returns 403 `NOT_HOLD_OWNER`.
+- `GET /holds/{holdId}` needs no header, never returns 403 and does not return `studentId`.
+- `GET /me/holds` returns an array, newest first. The brief describes it as all applications.
+- A successful hold returns 201.
+- A student can hold seats in several classes at once. Rule 3 names the same class only.
+- A cancelled or expired hold lets the student apply again.
+- Confirm on a confirmed hold of the same student returns 200 with the same body. Confirm on an expired hold returns 409 `HOLD_EXPIRED`. Confirm on a cancelled hold returns 409 `HOLD_CANCELLED`.
+- `DELETE` on a cancelled hold returns 204. `DELETE` on a confirmed hold returns 409 `HOLD_CONFIRMED`, and on an expired hold 409 `HOLD_EXPIRED`.
+- Hold IDs follow the class ID rules. A malformed or unknown ID returns 404 `HOLD_NOT_FOUND`.
+- There is no rate limiting. The row lock keeps seats safe, and a gateway owns rate limiting in production.
+- Under heavy load, requests queue for up to 60 seconds for a connection and 30 seconds for the class lock. Beyond that, the API returns 503 `SERVICE_BUSY` with `Retry-After`.
+- Each hold keeps the expiry it was given. A new `HOLD_DURATION_SECONDS` applies only to new holds.
+- The hold time starts when the hold transaction starts. A request that waited for the class lock gets a hold that is shorter by that wait.

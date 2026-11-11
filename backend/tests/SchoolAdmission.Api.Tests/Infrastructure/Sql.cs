@@ -13,6 +13,10 @@ public static class Sql
         await command.ExecuteNonQueryAsync();
     }
 
+    /// <summary>Moves a hold's expires_at one second into the past, using database time.</summary>
+    public static Task ExpireAsync(Guid holdId) =>
+        ExecAsync("update holds set expires_at = now() - interval '1 second' where id = $1", holdId);
+
     public static async Task<T> ScalarAsync<T>(string sql, params object[] args)
     {
         await using var command = CreateCommand(sql, args);

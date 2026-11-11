@@ -31,6 +31,14 @@ public class PostgresExceptionTranslatorTests
         Assert.Equal("SERVICE_BUSY", _translator.Translate(Pg(PostgresErrorCodes.LockNotAvailable))?.Code);
     }
 
+    [Fact]
+    public void Transient_wrapper_around_lock_timeout_gives_service_busy()
+    {
+        var wrapped = new InvalidOperationException("transient failure", Pg(PostgresErrorCodes.LockNotAvailable));
+
+        Assert.Equal("SERVICE_BUSY", _translator.Translate(wrapped)?.Code);
+    }
+
     public static TheoryData<NpgsqlException> PoolTimeouts => new()
     {
         new NpgsqlException("timeout", new TimeoutException()),

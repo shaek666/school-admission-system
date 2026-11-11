@@ -2,7 +2,7 @@ using SchoolAdmission.Business.Classes;
 
 namespace SchoolAdmission.Business.Tests.Fakes;
 
-public sealed class FakeClassRepository : IClassRepository
+public sealed class FakeClassRepository(CallLog? log = null) : IClassRepository
 {
     private readonly Dictionary<Guid, ClassSeats> _classes = new();
 
@@ -18,4 +18,10 @@ public sealed class FakeClassRepository : IClassRepository
 
     public Task<ClassSeats?> GetAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(_classes.GetValueOrDefault(id));
+
+    public Task<int?> LockAsync(Guid classId, CancellationToken ct)
+    {
+        log?.Add(CallLog.Lock);
+        return Task.FromResult(_classes.TryGetValue(classId, out var found) ? found.TotalSeats : (int?)null);
+    }
 }

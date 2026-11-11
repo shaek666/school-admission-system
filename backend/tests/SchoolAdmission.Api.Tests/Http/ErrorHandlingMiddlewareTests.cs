@@ -100,6 +100,44 @@ public class ErrorHandlingMiddlewareTests
     }
 
     [Fact]
+    public async Task Client_abort_gives_no_body_and_no_error_log()
+    {
+        using var cts = new CancellationTokenSource();
+        var context = NewContext();
+        context.RequestAborted = cts.Token;
+        var logger = new CountingLogger();
+        var middleware = new ErrorHandlingMiddleware(
+            _ =>
+            {
+                cts.Cancel();
+                throw new OperationCanceledException(cts.Token);
+            },
+            new FakeTranslator(null),
+            logger);
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal(0, context.Response.Body.Length);
+        Assert.Equal(0, logger.Entries);
+    }
+
+    private sealed class CountingLogger : Microsoft.Extensions.Logging.ILogger<ErrorHandlingMiddleware>
+    {
+        public int Entries { get; private set; }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel,
+            Microsoft.Extensions.Logging.EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) => Entries++;
+    }
+
+    [Fact]
     public async Task Translated_exception_uses_mapped_status()
     {
         var context = await RunAsync(new InvalidOperationException("db"), Errors.AlreadyApplied());

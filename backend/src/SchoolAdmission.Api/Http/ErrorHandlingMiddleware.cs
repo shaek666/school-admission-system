@@ -15,6 +15,10 @@ public sealed class ErrorHandlingMiddleware(
         {
             await next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // The client is gone, so there is nothing to log or write.
+        }
         catch (Exception ex) when (!context.RequestAborted.IsCancellationRequested && !context.Response.HasStarted)
         {
             await HandleAsync(context, ex);

@@ -9,6 +9,9 @@ public sealed class CallLog
     public const string HasActive = "HasActive";
     public const string CountActive = "CountActive";
     public const string Insert = "Insert";
+    public const string TryConfirm = "TryConfirm";
+    public const string TryCancel = "TryCancel";
+    public const string Get = "Get";
     public const string Commit = "Commit";
     public const string Dispose = "Dispose";
 

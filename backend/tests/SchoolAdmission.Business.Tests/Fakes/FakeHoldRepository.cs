@@ -38,7 +38,29 @@ public sealed class FakeHoldRepository(CallLog log) : IHoldRepository
         return Task.FromResult(record);
     }
 
-    public Task<HoldRecord?> GetAsync(Guid id, CancellationToken ct) => Task.FromResult<HoldRecord?>(null);
+    /// <summary>The hold GetAsync returns. Null means not found.</summary>
+    public HoldRecord? Stored { get; set; }
+
+    /// <summary>What the conditional UPDATEs report. Tests set it to true for the 1 row path.</summary>
+    public bool UpdateMatches { get; set; }
+
+    public Task<bool> TryConfirmAsync(Guid id, StudentId student, CancellationToken ct)
+    {
+        log.Add(CallLog.TryConfirm);
+        return Task.FromResult(UpdateMatches);
+    }
+
+    public Task<bool> TryCancelAsync(Guid id, StudentId student, CancellationToken ct)
+    {
+        log.Add(CallLog.TryCancel);
+        return Task.FromResult(UpdateMatches);
+    }
+
+    public Task<HoldRecord?> GetAsync(Guid id, CancellationToken ct)
+    {
+        log.Add(CallLog.Get);
+        return Task.FromResult(Stored);
+    }
 
     public Task<IReadOnlyList<HoldRecord>> ListForStudentAsync(StudentId student, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<HoldRecord>>([]);

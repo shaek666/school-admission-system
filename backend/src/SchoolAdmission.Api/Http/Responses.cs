@@ -28,6 +28,11 @@ public record MyHoldResponse(string HoldId, string ClassId, string ClassName, st
         new(h.Id.ToString(), h.ClassId.ToString(), h.ClassName, h.Status, HoldFormat.ExpiresAt(h));
 }
 
+public record ConfirmResponse(string HoldId, string Status)
+{
+    public static ConfirmResponse From(HoldRecord h) => new(h.Id.ToString(), h.Status);
+}
+
 internal static class HoldFormat
 {
     private const string ExpiresAtFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'";

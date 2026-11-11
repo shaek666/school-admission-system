@@ -69,6 +69,18 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
         JOIN classes c ON c.id = {{HoldSql.Alias}}.class_id
         """;
 
+    private const string ConfirmSql = $$"""
+        UPDATE holds
+        SET status = '{{HoldStatus.Confirmed}}'
+        WHERE id = {0} AND status = '{{HoldStatus.Held}}' AND expires_at > now() AND student_id = {1}
+        """;
+
+    private const string CancelSql = $$"""
+        UPDATE holds
+        SET status = '{{HoldStatus.Cancelled}}'
+        WHERE id = {0} AND status = '{{HoldStatus.Held}}' AND expires_at > now() AND student_id = {1}
+        """;
+
     private const string SelectSql = $$"""
         SELECT {{HoldSql.Alias}}.id AS "Id", {{HoldSql.Alias}}.class_id AS "ClassId", c.name AS "ClassName",
                {{HoldSql.Alias}}.student_id AS "StudentId", {{HoldSql.DerivedStatus}} AS "Status",
@@ -114,6 +126,12 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
             .ToListAsync(ct);
         return rows.Single().ToRecord();
     }
+
+    public async Task<bool> TryConfirmAsync(Guid id, StudentId student, CancellationToken ct) =>
+        await context.Database.ExecuteSqlRawAsync(ConfirmSql, [id, student.Value], ct) == 1;
+
+    public async Task<bool> TryCancelAsync(Guid id, StudentId student, CancellationToken ct) =>
+        await context.Database.ExecuteSqlRawAsync(CancelSql, [id, student.Value], ct) == 1;
 
     public async Task<HoldRecord?> GetAsync(Guid id, CancellationToken ct)
     {

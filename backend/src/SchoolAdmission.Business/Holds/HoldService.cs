@@ -68,6 +68,70 @@ public sealed class HoldService
         return await _holds.GetAsync(id, ct) ?? throw Errors.HoldNotFound();
     }
 
+    public async Task<HoldRecord> ConfirmAsync(string holdId, StudentId student, CancellationToken ct)
+    {
+        // The conditional UPDATE is the whole decision when it matches. On 0 rows, read the hold in the
+        // same transaction and apply the table: not found, other owner, then the state rules.
+        if (!Ids.TryParse(holdId, out var id))
+        {
+            throw Errors.HoldNotFound();
+        }
+
+        await using var tx = await _unitOfWork.BeginAsync(ct);
+        var matched = await _holds.TryConfirmAsync(id, student, ct);
+        var hold = await _holds.GetAsync(id, ct) ?? throw Errors.HoldNotFound();
+        if (!matched)
+        {
+            EnsureOwner(hold, student);
+            if (hold.Status != HoldStatus.Confirmed)
+            {
+                throw hold.Status == HoldStatus.Cancelled ? Errors.HoldCancelled() : Errors.HoldExpired();
+            }
+
+            return hold;
+        }
+
+        await tx.CommitAsync(ct);
+        _logger.LogInformation("Hold {HoldId} confirmed by student {Student}", id, student.Masked);
+        return hold;
+    }
+
+    public async Task CancelAsync(string holdId, StudentId student, CancellationToken ct)
+    {
+        if (!Ids.TryParse(holdId, out var id))
+        {
+            throw Errors.HoldNotFound();
+        }
+
+        await using var tx = await _unitOfWork.BeginAsync(ct);
+        if (await _holds.TryCancelAsync(id, student, ct))
+        {
+            await tx.CommitAsync(ct);
+            _logger.LogInformation("Hold {HoldId} cancelled by student {Student}", id, student.Masked);
+            return;
+        }
+
+        var hold = await _holds.GetAsync(id, ct) ?? throw Errors.HoldNotFound();
+        EnsureOwner(hold, student);
+        switch (hold.Status)
+        {
+            case HoldStatus.Cancelled:
+                return;
+            case HoldStatus.Confirmed:
+                throw Errors.HoldConfirmed();
+            default:
+                throw Errors.HoldExpired();
+        }
+    }
+
+    private static void EnsureOwner(HoldRecord hold, StudentId student)
+    {
+        if (hold.StudentId != student.Value)
+        {
+            throw Errors.NotHoldOwner();
+        }
+    }
+
     public Task<IReadOnlyList<HoldRecord>> ListMineAsync(StudentId student, CancellationToken ct) =>
         _holds.ListForStudentAsync(student, ct);
 }

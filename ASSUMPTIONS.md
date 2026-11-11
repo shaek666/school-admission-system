@@ -37,3 +37,8 @@ The brief does not cover every case. This file lists each assumption and the rea
 
 - Expiry is enforced at read time by database time. The background job only tidies the stored status, so correctness never depends on it.
 - `EXPIRY_SWEEP_SECONDS` must be a whole number from 1 to 86400 (one day). A longer period has no use, and the startup check rejects it with the key name.
+
+## Two instances
+
+- The seat lock lives in Postgres, and expiry uses database time. So two backend processes on one database stay safe.
+- The automated test runs two hosts in one process. The `multi` demo (`docker compose --profile multi up`) runs two processes, on ports 8080 and 8081.

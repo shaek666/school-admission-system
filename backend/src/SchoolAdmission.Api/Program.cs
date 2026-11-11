@@ -8,6 +8,7 @@ using SchoolAdmission.Api.Endpoints;
 using SchoolAdmission.Api.Http;
 using SchoolAdmission.Business;
 using SchoolAdmission.Business.Classes;
+using SchoolAdmission.Business.Holds;
 using SchoolAdmission.DataAccess;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,6 +31,10 @@ builder.Services.AddDbContext<AdmissionDbContext>(options => options
     .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
 builder.Services.AddScoped<IClassRepository, ClassRepository>();
 builder.Services.AddScoped<ClassService>();
+builder.Services.AddScoped<IHoldRepository, HoldRepository>();
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<HoldOptions>>().Value);
+builder.Services.AddScoped<HoldService>();
 builder.Services.AddSingleton<DatabaseMigrator>();
 builder.Services.AddSingleton<IExceptionTranslator, PostgresExceptionTranslator>();
 // Binding failures throw BadHttpRequestException in every environment (the default is Development only),
@@ -57,6 +62,7 @@ app.UseStatusCodePages(StatusCodeBody.WriteAsync);
 app.UseCors();
 app.UseRouting();
 app.MapClassEndpoints();
+app.MapHoldEndpoints();
 
 app.Run();
 

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using SchoolAdmission.Api.Http;
 using SchoolAdmission.Api.Tests.Infrastructure;
 
 namespace SchoolAdmission.Api.Tests;
@@ -33,7 +34,7 @@ public class ErrorPipelineTests(PostgresFixture fixture)
         using var request = new HttpRequestMessage(HttpMethod.Options, "/holds/x");
         request.Headers.Add("Origin", "http://127.0.0.1:3000");
         request.Headers.Add("Access-Control-Request-Method", "DELETE");
-        request.Headers.Add("Access-Control-Request-Headers", "X-Student-Id");
+        request.Headers.Add("Access-Control-Request-Headers", StudentIdHeader.Name);
 
         var response = await client.SendAsync(request);
 
@@ -42,7 +43,7 @@ public class ErrorPipelineTests(PostgresFixture fixture)
         var methods = string.Join(",", response.Headers.GetValues("Access-Control-Allow-Methods"));
         var headers = string.Join(",", response.Headers.GetValues("Access-Control-Allow-Headers"));
         Assert.Contains("DELETE", methods, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("X-Student-Id", headers, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(StudentIdHeader.Name, headers, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

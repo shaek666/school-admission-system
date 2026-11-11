@@ -38,9 +38,7 @@ public sealed class ClassRepository(AdmissionDbContext context) : IClassReposito
                (COUNT(h.id) FILTER (WHERE h.status = '{HoldStatus.Held}'))::int AS "HeldSeats",
                (COUNT(h.id) FILTER (WHERE h.status = '{HoldStatus.Confirmed}'))::int AS "ConfirmedSeats"
         FROM classes c
-        LEFT JOIN holds h ON h.class_id = c.id
-            AND (h.status = '{HoldStatus.Confirmed}'
-                 OR (h.status = '{HoldStatus.Held}' AND h.expires_at > now()))
+        LEFT JOIN holds h ON h.class_id = c.id AND {HoldSql.IsLive}
         """;
 
     private const string SeatGroupBy = "GROUP BY c.id, c.name, c.total_seats";
@@ -62,5 +60,14 @@ public sealed class ClassRepository(AdmissionDbContext context) : IClassReposito
             .SqlQuery<SeatRow>(Query("WHERE c.id = {0}", string.Empty, id))
             .ToListAsync(ct);
         return rows.SingleOrDefault()?.ToSeats();
+    }
+
+    // Runs on the context's open transaction. The lock lasts until it ends. No aggregate runs under the lock.
+    public async Task<int?> LockAsync(Guid classId, CancellationToken ct)
+    {
+        var rows = await context.Database
+            .SqlQueryRaw<int>("SELECT total_seats AS \"Value\" FROM classes WHERE id = {0} FOR UPDATE", classId)
+            .ToListAsync(ct);
+        return rows.Count == 0 ? null : rows[0];
     }
 }

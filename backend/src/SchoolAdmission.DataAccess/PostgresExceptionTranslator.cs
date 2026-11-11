@@ -10,7 +10,7 @@ public sealed class PostgresExceptionTranslator : IExceptionTranslator
 
     public AppException? Translate(Exception exception)
     {
-        var current = exception is DbUpdateException { InnerException: { } inner } ? inner : exception;
+        var current = Unwrap(exception);
 
         return current switch
         {
@@ -21,6 +21,14 @@ public sealed class PostgresExceptionTranslator : IExceptionTranslator
             _ => null
         };
     }
+
+    // EF wraps the database error in DbUpdateException, or in InvalidOperationException when the
+    // provider marks it transient (a lock timeout, for example). The real error is the inner one.
+    private static Exception Unwrap(Exception exception) =>
+        exception is DbUpdateException or InvalidOperationException { InnerException: NpgsqlException or PostgresException }
+            && exception.InnerException is { } inner
+            ? inner
+            : exception;
 
     private static bool IsPoolTimeout(NpgsqlException exception) =>
         exception.InnerException is TimeoutException

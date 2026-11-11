@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SchoolAdmission.Api.Http;
 using SchoolAdmission.Business;
@@ -97,6 +98,71 @@ public class ErrorHandlingMiddlewareTests
         var (code, message) = ReadError(context);
         Assert.Equal(expectedCode, code);
         Assert.DoesNotContain(SecretText, message);
+    }
+
+    [Fact]
+    public async Task Client_abort_gives_no_body_and_no_error_log()
+    {
+        using var cts = new CancellationTokenSource();
+        var context = NewContext();
+        context.RequestAborted = cts.Token;
+        var logger = new CountingLogger();
+        var middleware = new ErrorHandlingMiddleware(
+            _ =>
+            {
+                cts.Cancel();
+                throw new OperationCanceledException(cts.Token);
+            },
+            new FakeTranslator(null),
+            logger);
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal(0, context.Response.Body.Length);
+        Assert.Equal(0, logger.Entries);
+    }
+
+    [Fact]
+    public async Task Other_exception_after_client_abort_is_swallowed_with_a_debug_log()
+    {
+        // Npgsql can surface a broken stream instead of a cancellation when the client drops mid-query.
+        using var cts = new CancellationTokenSource();
+        var context = NewContext();
+        context.RequestAborted = cts.Token;
+        var logger = new CountingLogger();
+        var middleware = new ErrorHandlingMiddleware(
+            _ =>
+            {
+                cts.Cancel();
+                throw new InvalidOperationException("stream closed");
+            },
+            new FakeTranslator(null),
+            logger);
+
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal(0, context.Response.Body.Length);
+        Assert.Equal([LogLevel.Debug], logger.Levels);
+    }
+
+    private sealed class CountingLogger : ILogger<ErrorHandlingMiddleware>
+    {
+        private readonly List<LogLevel> _levels = [];
+
+        public int Entries => _levels.Count;
+
+        public IReadOnlyList<LogLevel> Levels => _levels;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) => _levels.Add(logLevel);
     }
 
     [Fact]

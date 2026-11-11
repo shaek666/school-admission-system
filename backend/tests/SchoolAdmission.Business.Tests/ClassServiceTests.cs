@@ -28,42 +28,42 @@ public class ClassServiceTests
         Assert.Equal(30, created.AvailableSeats);
     }
 
-    [Theory, InlineData(null), InlineData(""), InlineData("   ")]
-    public Task Missing_name_is_rejected(string? name) =>
-        AssertValidationAsync(_service.CreateAsync(new CreateClassRequest(name, 10), Ct));
-
-    [Fact]
-    public Task Name_of_201_chars_is_rejected() =>
-        AssertValidationAsync(_service.CreateAsync(new CreateClassRequest(new string('a', 201), 10), Ct));
-
-    [Fact]
-    public async Task Name_of_200_chars_is_accepted()
+    public static TheoryData<string?, int?> RejectedInputs => new()
     {
-        var created = await _service.CreateAsync(new CreateClassRequest(new string('a', 200), 10), Ct);
+        { null, 10 },
+        { "", 10 },
+        { "   ", 10 },
+        { "\t\n", 10 },
+        { new string('a', 201), 10 },
+        { " " + new string('a', 201) + " ", 10 },
+        { "Class 6", null },
+        { "Class 6", 0 },
+        { "Class 6", -1 },
+        { "Class 6", 100001 },
+    };
 
-        Assert.Equal(200, created.Name.Length);
-    }
-
-    [Theory, InlineData(null), InlineData(0), InlineData(-1), InlineData(100001)]
-    public Task Bad_seats_are_rejected(int? seats) =>
-        AssertValidationAsync(_service.CreateAsync(new CreateClassRequest("Class 6", seats), Ct));
-
-    [Theory, InlineData(1), InlineData(100000)]
-    public async Task Seat_bounds_are_accepted(int seats)
+    public static TheoryData<string, int> AcceptedInputs => new()
     {
-        var created = await _service.CreateAsync(new CreateClassRequest("Class 6", seats), Ct);
+        { new string('a', 200), 10 },
+        { " " + new string('a', 200) + " ", 10 },
+        { "Class 6", 1 },
+        { "Class 6", 100000 },
+        { "ষষ্ঠ শ্রেণি - প্রভাতী", 40 },
+    };
 
+    [Theory]
+    [MemberData(nameof(RejectedInputs))]
+    public Task Invalid_input_is_rejected(string? name, int? seats) =>
+        AssertValidationAsync(_service.CreateAsync(new CreateClassRequest(name, seats), Ct));
+
+    [Theory]
+    [MemberData(nameof(AcceptedInputs))]
+    public async Task Valid_input_is_accepted(string name, int seats)
+    {
+        var created = await _service.CreateAsync(new CreateClassRequest(name, seats), Ct);
+
+        Assert.Equal(name.Trim(), created.Name);
         Assert.Equal(seats, created.TotalSeats);
-    }
-
-    [Fact]
-    public async Task Bengali_name_is_accepted()
-    {
-        const string name = "ষষ্ঠ শ্রেণি - প্রভাতী";
-
-        var created = await _service.CreateAsync(new CreateClassRequest(name, 40), Ct);
-
-        Assert.Equal(name, created.Name);
     }
 
     [Fact]

@@ -2,9 +2,9 @@ namespace SchoolAdmission.Business.Classes;
 
 public sealed class ClassService(IClassRepository repository)
 {
-    public const int MaxNameLength = 200;
-    public const int MinSeats = 1;
-    public const int MaxSeats = 100_000;
+    private const int MaxNameLength = 200;
+    private const int MinSeats = 1;
+    private const int MaxSeats = 100_000;
 
     public async Task<ClassSeats> CreateAsync(CreateClassRequest request, CancellationToken ct)
     {

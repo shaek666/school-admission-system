@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using SchoolAdmission.Business.Classes;
 using SchoolAdmission.DataAccess.Entities;
@@ -29,31 +30,35 @@ public sealed class ClassRepository(AdmissionDbContext context) : IClassReposito
         return new ClassSeats(id, name, totalSeats, 0, 0);
     }
 
+    // Only live holds are joined, so expired and cancelled rows are never grouped.
+    private const string SeatSelect = $"""
+        SELECT c.id AS "Id", c.name AS "Name", c.total_seats AS "TotalSeats",
+               (COUNT(h.id) FILTER (WHERE h.status = '{HoldStatus.Held}'))::int AS "HeldSeats",
+               (COUNT(h.id) FILTER (WHERE h.status = '{HoldStatus.Confirmed}'))::int AS "ConfirmedSeats"
+        FROM classes c
+        LEFT JOIN holds h ON h.class_id = c.id
+            AND (h.status = '{HoldStatus.Confirmed}'
+                 OR (h.status = '{HoldStatus.Held}' AND h.expires_at > now()))
+        """;
+
+    private const string SeatGroupBy = "GROUP BY c.id, c.name, c.total_seats";
+
+    private static FormattableString Query(string whereClause, string orderBy, params object[] args) =>
+        FormattableStringFactory.Create($"{SeatSelect}\n{whereClause}\n{SeatGroupBy}\n{orderBy}", args);
+
     public async Task<IReadOnlyList<ClassSeats>> ListAsync(CancellationToken ct)
     {
-        var rows = await context.Database.SqlQuery<SeatRow>($"""
-            SELECT c.id AS "Id", c.name AS "Name", c.total_seats AS "TotalSeats",
-                   (COUNT(h.id) FILTER (WHERE h.status = 'HELD' AND h.expires_at > now()))::int AS "HeldSeats",
-                   (COUNT(h.id) FILTER (WHERE h.status = 'CONFIRMED'))::int AS "ConfirmedSeats"
-            FROM classes c
-            LEFT JOIN holds h ON h.class_id = c.id
-            GROUP BY c.id, c.name, c.total_seats
-            ORDER BY c.name, c.id
-            """).ToListAsync(ct);
+        var rows = await context.Database
+            .SqlQuery<SeatRow>(Query(string.Empty, "ORDER BY c.name, c.id"))
+            .ToListAsync(ct);
         return rows.ConvertAll(row => row.ToSeats());
     }
 
     public async Task<ClassSeats?> GetAsync(Guid id, CancellationToken ct)
     {
-        var rows = await context.Database.SqlQuery<SeatRow>($"""
-            SELECT c.id AS "Id", c.name AS "Name", c.total_seats AS "TotalSeats",
-                   (COUNT(h.id) FILTER (WHERE h.status = 'HELD' AND h.expires_at > now()))::int AS "HeldSeats",
-                   (COUNT(h.id) FILTER (WHERE h.status = 'CONFIRMED'))::int AS "ConfirmedSeats"
-            FROM classes c
-            LEFT JOIN holds h ON h.class_id = c.id
-            WHERE c.id = {id}
-            GROUP BY c.id, c.name, c.total_seats
-            """).ToListAsync(ct);
-        return rows.Count == 0 ? null : rows[0].ToSeats();
+        var rows = await context.Database
+            .SqlQuery<SeatRow>(Query("WHERE c.id = {0}", string.Empty, id))
+            .ToListAsync(ct);
+        return rows.SingleOrDefault()?.ToSeats();
     }
 }

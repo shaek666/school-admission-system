@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using SchoolAdmission.Api.Tests.Infrastructure;
 
@@ -8,8 +7,14 @@ namespace SchoolAdmission.Api.Tests;
 [Collection(PostgresCollection.Name)]
 public class ClassContractTests(PostgresFixture fixture)
 {
-    private static readonly string[] CountFields =
-        ["id", "name", "totalSeats", "heldSeats", "confirmedSeats", "availableSeats"];
+    private static readonly string[] ContractProperties =
+        ["availableSeats", "confirmedSeats", "heldSeats", "id", "name", "totalSeats"];
+
+    private static void AssertContractShape(JsonElement element)
+    {
+        Assert.Equal(JsonValueKind.Object, element.ValueKind);
+        Assert.Equal(ContractProperties, element.EnumerateObject().Select(p => p.Name).Order().ToArray());
+    }
 
     [Fact]
     public async Task Post_class_returns_201_with_contract_fields()
@@ -17,12 +22,11 @@ public class ClassContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var name = "Class 6 - Morning Shift " + Guid.NewGuid();
 
-        var response = await client.PostAsJsonAsync("/classes", new { name, totalSeats = 120 });
+        var response = await TestData.PostClassAsync(client, 120, name);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var root = doc.RootElement;
-        Assert.Equal(JsonValueKind.String, root.GetProperty("id").ValueKind);
+        var root = await HttpJson.ReadJsonAsync(response);
+        AssertContractShape(root);
         Assert.True(Guid.TryParse(root.GetProperty("id").GetString(), out _));
         Assert.Equal(name, root.GetProperty("name").GetString());
         Assert.Equal(120, root.GetProperty("totalSeats").GetInt32());
@@ -36,8 +40,7 @@ public class ClassContractTests(PostgresFixture fixture)
 
         var item = await FindInListAsync(client, id);
 
-        foreach (var field in CountFields)
-            Assert.True(item.TryGetProperty(field, out _), $"missing {field}");
+        AssertContractShape(item);
         Assert.Equal(0, item.GetProperty("heldSeats").GetInt32());
         Assert.Equal(0, item.GetProperty("confirmedSeats").GetInt32());
         Assert.Equal(120, item.GetProperty("availableSeats").GetInt32());
@@ -53,8 +56,7 @@ public class ClassContractTests(PostgresFixture fixture)
         var response = await client.GetAsync($"/classes/{id}");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal(listItem.GetRawText(), doc.RootElement.GetRawText());
+        Assert.Equal(listItem.GetRawText(), (await HttpJson.ReadJsonAsync(response)).GetRawText());
     }
 
     [Theory]
@@ -67,8 +69,7 @@ public class ClassContractTests(PostgresFixture fixture)
         var response = await client.GetAsync($"/classes/{id}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("CLASS_NOT_FOUND", doc.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("CLASS_NOT_FOUND", await HttpJson.ErrorCodeAsync(response));
     }
 
     [Fact]
@@ -77,19 +78,22 @@ public class ClassContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var name = "Duplicate " + Guid.NewGuid();
 
-        var first = await client.PostAsJsonAsync("/classes", new { name, totalSeats = 3 });
-        var second = await client.PostAsJsonAsync("/classes", new { name, totalSeats = 3 });
+        var first = await TestData.PostClassAsync(client, 3, name);
+        var second = await TestData.PostClassAsync(client, 3, name);
 
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        var firstId = (await HttpJson.ReadJsonAsync(first)).GetProperty("id").GetString();
+        var secondId = (await HttpJson.ReadJsonAsync(second)).GetProperty("id").GetString();
+        Assert.NotEqual(firstId, secondId);
     }
 
     private static async Task<JsonElement> FindInListAsync(HttpClient client, string id)
     {
         var response = await client.GetAsync("/classes");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal(JsonValueKind.Array, doc.RootElement.ValueKind);
-        return doc.RootElement.EnumerateArray().Single(e => e.GetProperty("id").GetString() == id).Clone();
+        var list = await HttpJson.ReadJsonAsync(response);
+        Assert.Equal(JsonValueKind.Array, list.ValueKind);
+        return list.EnumerateArray().Single(e => e.GetProperty("id").GetString() == id);
     }
 }

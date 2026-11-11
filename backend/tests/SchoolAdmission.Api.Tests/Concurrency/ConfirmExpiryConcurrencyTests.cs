@@ -11,9 +11,9 @@ public class ConfirmExpiryConcurrencyTests
 
     private static async Task WaitUntilExpiredAsync(HttpClient client, string holdId)
     {
-        var expired = await Wait.UntilAsync(async () =>
+        var expired = await Wait.UntilAsync(async ct =>
         {
-            var root = await HttpJson.ReadJsonAsync(await client.GetAsync($"/holds/{holdId}"));
+            var root = await HttpJson.ReadJsonAsync(await client.GetAsync($"/holds/{holdId}", ct));
             return root.GetProperty("status").GetString() == "EXPIRED";
         }, ExpiryWait);
 

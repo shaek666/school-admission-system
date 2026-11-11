@@ -29,9 +29,9 @@ public sealed class HoldExpiryService(
                 }
             }
         }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        catch (Exception) when (stoppingToken.IsCancellationRequested)
         {
-            // Shutdown ends the loop quietly.
+            // Shutdown ends the loop quietly, whatever the provider throws while it is cancelled.
         }
     }
 }

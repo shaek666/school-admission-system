@@ -18,6 +18,8 @@ public static class HoldOptionsSetup
             })
             .Validate(options => options.DurationSeconds > 0, Describe(configuration, DurationKey))
             .Validate(options => options.SweepSeconds > 0, Describe(configuration, SweepKey))
+            .Validate(options => options.SweepSeconds <= HoldOptions.MaxSweepSeconds,
+                $"{SweepKey} must be at most {HoldOptions.MaxSweepSeconds}, but the value is '{configuration[SweepKey]}'.")
             .ValidateOnStart();
         return services;
     }

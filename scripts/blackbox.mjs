@@ -93,6 +93,17 @@ async function main() {
 
   await expect("cancel the other hold", "DELETE", `/holds/${holdB.holdId}`, 204, { student: second });
 
+  const seats = await expect("GET /classes/{id}", "GET", `/classes/${classId}`, 200);
+  const counts = { confirmedSeats: 1, heldSeats: 0, availableSeats: 1 };
+  for (const [field, expected] of Object.entries(counts)) {
+    if (seats[field] !== expected) fail(`${field}: expected ${expected}, got ${JSON.stringify(seats)}`);
+  }
+
+  for (const [hold, expected] of [[holdA, "CONFIRMED"], [holdB, "CANCELLED"]]) {
+    const read = await expect(`GET /holds/{id} reads ${expected}`, "GET", `/holds/${hold.holdId}`, 200);
+    if (read.status !== expected) fail(`hold ${hold.holdId}: expected ${expected}, got ${JSON.stringify(read)}`);
+  }
+
   const mine = await expect("GET /me/holds", "GET", "/me/holds", 200, { student: first });
   if (!Array.isArray(mine)) fail(`/me/holds is not an array: ${JSON.stringify(mine)}`);
 

@@ -53,9 +53,10 @@ public class SweepTests
         var (expired, live) = await CreateExpiredAndLiveAsync(factory);
         await SweepAsync(factory);
 
-        var second = await SweepAsync(factory);
+        // The sweep is global and the test database keeps old rows, so another hold can expire between the
+        // two calls. Assert on this test's rows only: the second sweep leaves them as they are.
+        await SweepAsync(factory);
 
-        Assert.Equal(0, second);
         Assert.Equal("EXPIRED", await StoredStatusAsync(expired));
         Assert.Equal("HELD", await StoredStatusAsync(live));
     }
@@ -66,7 +67,7 @@ public class SweepTests
         using var factory = new AppFactory().WithSetting("EXPIRY_SWEEP_SECONDS", "1");
         var (expired, live) = await CreateExpiredAndLiveAsync(factory);
 
-        var swept = await Wait.UntilAsync(async () => await StoredStatusAsync(expired) == "EXPIRED", SweepWait);
+        var swept = await Wait.UntilAsync(async _ => await StoredStatusAsync(expired) == "EXPIRED", SweepWait);
 
         Assert.True(swept, $"Hold {expired} was not stored as EXPIRED within {SweepWait.TotalSeconds} s.");
 

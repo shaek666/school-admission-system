@@ -40,5 +40,15 @@ services:
       postgres:
         condition: service_healthy
 
+  blackbox:
+    image: node:22-alpine
+    profiles: [test]
+    command: ["node", "/scripts/blackbox.mjs"]
+    environment:
+      BASE_URL: http://backend:8080
+    volumes:
+      - ./scripts:/scripts:ro
+    depends_on: [backend]
+
 volumes:
   pgdata:

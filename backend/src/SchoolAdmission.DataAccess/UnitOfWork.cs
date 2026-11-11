@@ -18,11 +18,9 @@ public sealed class UnitOfWork(AdmissionDbContext context, IOptions<DataAccessOp
         var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
         try
         {
-            // SET does not take parameters. The value is a validated positive int, formatted invariantly.
-            var seconds = options.Value.LockTimeoutSeconds.ToString(CultureInfo.InvariantCulture);
-#pragma warning disable EF1002 // Not user input: a validated int, so there is nothing to inject.
-            await context.Database.ExecuteSqlRawAsync($"SET LOCAL lock_timeout = '{seconds}s'", ct);
-#pragma warning restore EF1002
+            // set_config(..., true) is SET LOCAL that takes a parameter, so no SQL is built from strings.
+            var timeout = options.Value.LockTimeoutSeconds.ToString(CultureInfo.InvariantCulture) + "s";
+            await context.Database.ExecuteSqlRawAsync("SELECT set_config('lock_timeout', {0}, true)", [timeout], ct);
         }
         catch
         {

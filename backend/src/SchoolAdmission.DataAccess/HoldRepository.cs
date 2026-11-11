@@ -34,10 +34,9 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
     }
 
     private const string ExpireStaleSql = $$"""
-        UPDATE holds
+        UPDATE holds {{HoldSql.Alias}}
         SET status = '{{HoldStatus.Expired}}'
-        WHERE class_id = {0} AND student_id = {1}
-          AND status = '{{HoldStatus.Held}}' AND expires_at <= now()
+        WHERE {{HoldSql.Alias}}.class_id = {0} AND {{HoldSql.Alias}}.student_id = {1} AND {{HoldSql.IsStaleHeld}}
         """;
 
     private const string HasActiveSql = $$"""
@@ -69,16 +68,11 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
         JOIN classes c ON c.id = {{HoldSql.Alias}}.class_id
         """;
 
-    private const string ConfirmSql = $$"""
-        UPDATE holds
-        SET status = '{{HoldStatus.Confirmed}}'
-        WHERE id = {0} AND status = '{{HoldStatus.Held}}' AND expires_at > now() AND student_id = {1}
-        """;
-
-    private const string CancelSql = $$"""
-        UPDATE holds
-        SET status = '{{HoldStatus.Cancelled}}'
-        WHERE id = {0} AND status = '{{HoldStatus.Held}}' AND expires_at > now() AND student_id = {1}
+    // Moves an open HELD hold owned by the student to the status in {2}. Confirm and cancel share it.
+    private const string TransitionSql = $$"""
+        UPDATE holds {{HoldSql.Alias}}
+        SET status = {2}
+        WHERE {{HoldSql.Alias}}.id = {0} AND {{HoldSql.Alias}}.student_id = {1} AND {{HoldSql.IsOpenHeld}}
         """;
 
     private const string SelectSql = $$"""
@@ -127,11 +121,14 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
         return rows.Single().ToRecord();
     }
 
-    public async Task<bool> TryConfirmAsync(Guid id, StudentId student, CancellationToken ct) =>
-        await context.Database.ExecuteSqlRawAsync(ConfirmSql, [id, student.Value], ct) == 1;
+    public Task<bool> TryConfirmAsync(Guid id, StudentId student, CancellationToken ct) =>
+        TransitionAsync(id, student, HoldStatus.Confirmed, ct);
 
-    public async Task<bool> TryCancelAsync(Guid id, StudentId student, CancellationToken ct) =>
-        await context.Database.ExecuteSqlRawAsync(CancelSql, [id, student.Value], ct) == 1;
+    public Task<bool> TryCancelAsync(Guid id, StudentId student, CancellationToken ct) =>
+        TransitionAsync(id, student, HoldStatus.Cancelled, ct);
+
+    private async Task<bool> TransitionAsync(Guid id, StudentId student, string status, CancellationToken ct) =>
+        await context.Database.ExecuteSqlRawAsync(TransitionSql, [id, student.Value, status], ct) == 1;
 
     public async Task<HoldRecord?> GetAsync(Guid id, CancellationToken ct)
     {

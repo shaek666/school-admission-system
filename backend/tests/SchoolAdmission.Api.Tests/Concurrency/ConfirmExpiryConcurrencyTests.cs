@@ -10,20 +10,6 @@ public class ConfirmExpiryConcurrencyTests
     private static readonly TimeSpan ExpiryWait = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(200);
 
-    private static async Task<HttpResponseMessage> SendAsync(HttpClient client, HttpMethod method, string url, string studentId)
-    {
-        using var request = new HttpRequestMessage(method, url);
-        request.Headers.Add("X-Student-Id", studentId);
-        return await client.SendAsync(request);
-    }
-
-    private static async Task<string> CreateHoldAsync(HttpClient client, string classId, string studentId)
-    {
-        var response = await SendAsync(client, HttpMethod.Post, $"/classes/{classId}/holds", studentId);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await HttpJson.ReadJsonAsync(response)).GetProperty("holdId").GetString()!;
-    }
-
     private static async Task WaitUntilExpiredAsync(HttpClient client, string holdId)
     {
         using var cts = new CancellationTokenSource(ExpiryWait);
@@ -43,7 +29,7 @@ public class ConfirmExpiryConcurrencyTests
     {
         var classId = await TestData.CreateClassAsync(client, 2);
         var student = TestData.NewStudentId();
-        var holdId = await CreateHoldAsync(client, classId, student);
+        var holdId = await TestData.CreateHoldAsync(client, classId, student);
         await WaitUntilExpiredAsync(client, holdId);
         return (holdId, student);
     }
@@ -55,11 +41,11 @@ public class ConfirmExpiryConcurrencyTests
         using var client = factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 3);
         var student = TestData.NewStudentId();
-        var holdId = await CreateHoldAsync(client, classId, student);
+        var holdId = await TestData.CreateHoldAsync(client, classId, student);
 
         var statuses = await Task.WhenAll(Enumerable.Range(0, ParallelConfirms).Select(async _ =>
         {
-            using var response = await SendAsync(client, HttpMethod.Post, $"/holds/{holdId}/confirm", student);
+            using var response = await TestData.SendAsync(client, HttpMethod.Post, $"/holds/{holdId}/confirm", student);
             return response.StatusCode;
         }));
 
@@ -76,7 +62,7 @@ public class ConfirmExpiryConcurrencyTests
         using var client = factory.CreateClient();
         var (holdId, student) = await ExpiredHoldAsync(client);
 
-        var response = await SendAsync(client, HttpMethod.Post, $"/holds/{holdId}/confirm", student);
+        var response = await TestData.SendAsync(client, HttpMethod.Post, $"/holds/{holdId}/confirm", student);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("HOLD_EXPIRED", await HttpJson.ErrorCodeAsync(response));
@@ -89,7 +75,7 @@ public class ConfirmExpiryConcurrencyTests
         using var client = factory.CreateClient();
         var (holdId, student) = await ExpiredHoldAsync(client);
 
-        var response = await SendAsync(client, HttpMethod.Delete, $"/holds/{holdId}", student);
+        var response = await TestData.SendAsync(client, HttpMethod.Delete, $"/holds/{holdId}", student);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("HOLD_EXPIRED", await HttpJson.ErrorCodeAsync(response));

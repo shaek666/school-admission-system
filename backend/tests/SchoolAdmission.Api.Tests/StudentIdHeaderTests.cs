@@ -14,7 +14,7 @@ public class StudentIdHeaderTests
         var request = new DefaultHttpContext().Request;
         if (header is { } values)
         {
-            request.Headers["X-Student-Id"] = values;
+            request.Headers[StudentIdHeader.Name] = values;
         }
 
         return request;

@@ -8,15 +8,15 @@ internal static class HoldSql
     /// <summary>Alias of the holds table in every query that uses <see cref="IsLive"/>.</summary>
     public const string Alias = "h";
 
+    /// <summary>HELD and not yet expired by database time. Only such a hold can be confirmed or cancelled.</summary>
+    public const string IsOpenHeld = $"({Alias}.status = '{HoldStatus.Held}' AND {Alias}.expires_at > now())";
+
+    /// <summary>HELD but past its expiry by database time. The complement of <see cref="IsOpenHeld"/> among HELD rows.</summary>
+    public const string IsStaleHeld = $"({Alias}.status = '{HoldStatus.Held}' AND {Alias}.expires_at <= now())";
+
     /// <summary>CONFIRMED, or HELD and not yet expired by database time.</summary>
-    public const string IsLive = $"""
-        ({Alias}.status = '{HoldStatus.Confirmed}'
-         OR ({Alias}.status = '{HoldStatus.Held}' AND {Alias}.expires_at > now()))
-        """;
+    public const string IsLive = $"({Alias}.status = '{HoldStatus.Confirmed}' OR {IsOpenHeld})";
 
     /// <summary>The status as clients see it: a HELD hold past its expiry reads as EXPIRED, by database time.</summary>
-    public const string DerivedStatus = $"""
-        CASE WHEN {Alias}.status = '{HoldStatus.Held}' AND {Alias}.expires_at <= now()
-             THEN '{HoldStatus.Expired}' ELSE {Alias}.status END
-        """;
+    public const string DerivedStatus = $"CASE WHEN {IsStaleHeld} THEN '{HoldStatus.Expired}' ELSE {Alias}.status END";
 }

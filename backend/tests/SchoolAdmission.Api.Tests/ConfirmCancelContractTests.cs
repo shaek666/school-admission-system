@@ -6,29 +6,11 @@ namespace SchoolAdmission.Api.Tests;
 [Collection(PostgresCollection.Name)]
 public class ConfirmCancelContractTests(PostgresFixture fixture)
 {
-    private static async Task<HttpResponseMessage> SendAsync(HttpClient client, HttpMethod method, string url, string? studentId)
-    {
-        using var request = new HttpRequestMessage(method, url);
-        if (studentId is not null)
-        {
-            request.Headers.Add("X-Student-Id", studentId);
-        }
-
-        return await client.SendAsync(request);
-    }
-
-    private static async Task<string> CreateHoldAsync(HttpClient client, string classId, string studentId)
-    {
-        var response = await SendAsync(client, HttpMethod.Post, $"/classes/{classId}/holds", studentId);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await HttpJson.ReadJsonAsync(response)).GetProperty("holdId").GetString()!;
-    }
-
     private static Task<HttpResponseMessage> ConfirmAsync(HttpClient client, string holdId, string? studentId) =>
-        SendAsync(client, HttpMethod.Post, $"/holds/{holdId}/confirm", studentId);
+        TestData.SendAsync(client, HttpMethod.Post, $"/holds/{holdId}/confirm", studentId);
 
     private static Task<HttpResponseMessage> DeleteAsync(HttpClient client, string holdId, string? studentId) =>
-        SendAsync(client, HttpMethod.Delete, $"/holds/{holdId}", studentId);
+        TestData.SendAsync(client, HttpMethod.Delete, $"/holds/{holdId}", studentId);
 
     private static async Task<int> SeatAsync(HttpClient client, string classId, string property)
     {
@@ -42,7 +24,7 @@ public class ConfirmCancelContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 3);
         var student = TestData.NewStudentId();
-        var holdId = await CreateHoldAsync(client, classId, student);
+        var holdId = await TestData.CreateHoldAsync(client, classId, student);
 
         var response = await ConfirmAsync(client, holdId, student);
 
@@ -59,7 +41,7 @@ public class ConfirmCancelContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 3);
         var student = TestData.NewStudentId();
-        var holdId = await CreateHoldAsync(client, classId, student);
+        var holdId = await TestData.CreateHoldAsync(client, classId, student);
 
         var first = await ConfirmAsync(client, holdId, student);
         var second = await ConfirmAsync(client, holdId, student);
@@ -87,7 +69,7 @@ public class ConfirmCancelContractTests(PostgresFixture fixture)
     {
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 3);
-        var holdId = await CreateHoldAsync(client, classId, TestData.NewStudentId());
+        var holdId = await TestData.CreateHoldAsync(client, classId, TestData.NewStudentId());
 
         var response = await ConfirmAsync(client, holdId, TestData.NewStudentId());
 
@@ -118,7 +100,7 @@ public class ConfirmCancelContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 3);
         var student = TestData.NewStudentId();
-        var holdId = await CreateHoldAsync(client, classId, student);
+        var holdId = await TestData.CreateHoldAsync(client, classId, student);
         Assert.Equal(2, await SeatAsync(client, classId, "availableSeats"));
 
         var response = await DeleteAsync(client, holdId, student);
@@ -134,7 +116,7 @@ public class ConfirmCancelContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 3);
         var student = TestData.NewStudentId();
-        var holdId = await CreateHoldAsync(client, classId, student);
+        var holdId = await TestData.CreateHoldAsync(client, classId, student);
 
         var first = await DeleteAsync(client, holdId, student);
         var second = await DeleteAsync(client, holdId, student);
@@ -148,7 +130,7 @@ public class ConfirmCancelContractTests(PostgresFixture fixture)
     {
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 3);
-        var holdId = await CreateHoldAsync(client, classId, TestData.NewStudentId());
+        var holdId = await TestData.CreateHoldAsync(client, classId, TestData.NewStudentId());
 
         var response = await DeleteAsync(client, holdId, TestData.NewStudentId());
 
@@ -162,7 +144,7 @@ public class ConfirmCancelContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 3);
         var student = TestData.NewStudentId();
-        var holdId = await CreateHoldAsync(client, classId, student);
+        var holdId = await TestData.CreateHoldAsync(client, classId, student);
         await ConfirmAsync(client, holdId, student);
 
         var response = await DeleteAsync(client, holdId, student);
@@ -177,7 +159,7 @@ public class ConfirmCancelContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 3);
         var student = TestData.NewStudentId();
-        var holdId = await CreateHoldAsync(client, classId, student);
+        var holdId = await TestData.CreateHoldAsync(client, classId, student);
         await DeleteAsync(client, holdId, student);
 
         var response = await ConfirmAsync(client, holdId, student);
@@ -192,10 +174,10 @@ public class ConfirmCancelContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 3);
         var student = TestData.NewStudentId();
-        var holdId = await CreateHoldAsync(client, classId, student);
+        var holdId = await TestData.CreateHoldAsync(client, classId, student);
         await DeleteAsync(client, holdId, student);
 
-        var again = await CreateHoldAsync(client, classId, student);
+        var again = await TestData.CreateHoldAsync(client, classId, student);
 
         Assert.NotEqual(holdId, again);
     }

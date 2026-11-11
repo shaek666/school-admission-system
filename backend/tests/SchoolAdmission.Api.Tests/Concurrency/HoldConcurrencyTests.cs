@@ -16,9 +16,7 @@ public class HoldConcurrencyTests
     {
         var tasks = studentIds.Select(async studentId =>
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, $"/classes/{classId}/holds");
-            request.Headers.Add("X-Student-Id", studentId);
-            using var response = await client.SendAsync(request);
+            using var response = await TestData.SendAsync(client, HttpMethod.Post, $"/classes/{classId}/holds", studentId);
             var code = response.IsSuccessStatusCode ? null : await HttpJson.ErrorCodeAsync(response);
             return (response.StatusCode, code);
         }).ToArray();
@@ -105,10 +103,9 @@ public class HoldConcurrencyTests
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, $"/classes/{classId}/holds");
-            request.Headers.Add("X-Student-Id", TestData.NewStudentId());
-
-            using var response = await client.SendAsync(request).WaitAsync(LockTestTimeout);
+            using var response = await TestData
+                .SendAsync(client, HttpMethod.Post, $"/classes/{classId}/holds", TestData.NewStudentId())
+                .WaitAsync(LockTestTimeout);
 
             Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
             Assert.Equal("SERVICE_BUSY", await HttpJson.ErrorCodeAsync(response));

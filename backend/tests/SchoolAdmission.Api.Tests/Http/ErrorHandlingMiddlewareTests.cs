@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SchoolAdmission.Api.Http;
 using SchoolAdmission.Business;
@@ -121,17 +122,17 @@ public class ErrorHandlingMiddlewareTests
         Assert.Equal(0, logger.Entries);
     }
 
-    private sealed class CountingLogger : Microsoft.Extensions.Logging.ILogger<ErrorHandlingMiddleware>
+    private sealed class CountingLogger : ILogger<ErrorHandlingMiddleware>
     {
         public int Entries { get; private set; }
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
 
-        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+        public bool IsEnabled(LogLevel logLevel) => true;
 
         public void Log<TState>(
-            Microsoft.Extensions.Logging.LogLevel logLevel,
-            Microsoft.Extensions.Logging.EventId eventId,
+            LogLevel logLevel,
+            EventId eventId,
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter) => Entries++;

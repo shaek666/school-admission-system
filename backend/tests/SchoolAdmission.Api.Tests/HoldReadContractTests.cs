@@ -10,34 +10,14 @@ public class HoldReadContractTests(PostgresFixture fixture)
     private static readonly string[] HoldContractProperties = ["classId", "expiresAt", "holdId", "status"];
     private static readonly string[] MyHoldContractProperties = ["classId", "className", "expiresAt", "holdId", "status"];
 
-    private static async Task<JsonElement> PostHoldAsync(HttpClient client, string classId, string studentId)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/classes/{classId}/holds");
-        request.Headers.Add("X-Student-Id", studentId);
-        var response = await client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return await HttpJson.ReadJsonAsync(response);
-    }
-
-    private static async Task<HttpResponseMessage> GetAsync(HttpClient client, string url, string? studentId = null)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        if (studentId is not null)
-        {
-            request.Headers.Add("X-Student-Id", studentId);
-        }
-
-        return await client.SendAsync(request);
-    }
-
     [Fact]
     public async Task Get_hold_returns_contract_fields_without_studentId()
     {
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 5);
-        var created = await PostHoldAsync(client, classId, TestData.NewStudentId());
+        var created = await TestData.CreateHoldJsonAsync(client, classId, TestData.NewStudentId());
 
-        var response = await GetAsync(client, $"/holds/{created.GetProperty("holdId").GetString()}");
+        var response = await TestData.SendAsync(client, HttpMethod.Get, $"/holds/{created.GetProperty("holdId").GetString()}");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var root = await HttpJson.ReadJsonAsync(response);
@@ -53,12 +33,12 @@ public class HoldReadContractTests(PostgresFixture fixture)
     {
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 5);
-        var created = await PostHoldAsync(client, classId, TestData.NewStudentId());
+        var created = await TestData.CreateHoldJsonAsync(client, classId, TestData.NewStudentId());
         var url = $"/holds/{created.GetProperty("holdId").GetString()}";
 
-        var withoutHeader = await GetAsync(client, url);
-        var otherStudent = await GetAsync(client, url, TestData.NewStudentId());
-        var badHeader = await GetAsync(client, url, "123");
+        var withoutHeader = await TestData.SendAsync(client, HttpMethod.Get, url);
+        var otherStudent = await TestData.SendAsync(client, HttpMethod.Get, url, TestData.NewStudentId());
+        var badHeader = await TestData.SendAsync(client, HttpMethod.Get, url, "123");
 
         Assert.Equal(HttpStatusCode.OK, withoutHeader.StatusCode);
         Assert.Equal(HttpStatusCode.OK, otherStudent.StatusCode);
@@ -70,11 +50,11 @@ public class HoldReadContractTests(PostgresFixture fixture)
     {
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 5);
-        var created = await PostHoldAsync(client, classId, TestData.NewStudentId());
+        var created = await TestData.CreateHoldJsonAsync(client, classId, TestData.NewStudentId());
         var holdId = created.GetProperty("holdId").GetString()!;
         await Sql.ExecAsync("update holds set expires_at = now() - interval '1 minute' where id = $1", Guid.Parse(holdId));
 
-        var root = await HttpJson.ReadJsonAsync(await GetAsync(client, $"/holds/{holdId}"));
+        var root = await HttpJson.ReadJsonAsync(await TestData.SendAsync(client, HttpMethod.Get, $"/holds/{holdId}"));
 
         Assert.Equal("EXPIRED", root.GetProperty("status").GetString());
     }
@@ -89,7 +69,7 @@ public class HoldReadContractTests(PostgresFixture fixture)
     {
         using var client = fixture.Factory.CreateClient();
 
-        var response = await GetAsync(client, $"/holds/{holdId}");
+        var response = await TestData.SendAsync(client, HttpMethod.Get, $"/holds/{holdId}");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("HOLD_NOT_FOUND", await HttpJson.ErrorCodeAsync(response));
@@ -102,10 +82,10 @@ public class HoldReadContractTests(PostgresFixture fixture)
         var student = TestData.NewStudentId();
         var first = await TestData.CreateClassAsync(client, 5, "First class " + Guid.NewGuid());
         var second = await TestData.CreateClassAsync(client, 5, "Second class " + Guid.NewGuid());
-        var oldest = await PostHoldAsync(client, first, student);
-        var newest = await PostHoldAsync(client, second, student);
+        var oldest = await TestData.CreateHoldJsonAsync(client, first, student);
+        var newest = await TestData.CreateHoldJsonAsync(client, second, student);
 
-        var response = await GetAsync(client, "/me/holds", student);
+        var response = await TestData.SendAsync(client, HttpMethod.Get, "/me/holds", student);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var items = (await HttpJson.ReadJsonAsync(response)).EnumerateArray().ToList();
@@ -125,10 +105,10 @@ public class HoldReadContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 5);
         var mine = TestData.NewStudentId();
-        await PostHoldAsync(client, classId, mine);
-        await PostHoldAsync(client, classId, TestData.NewStudentId());
+        await TestData.CreateHoldJsonAsync(client, classId, mine);
+        await TestData.CreateHoldJsonAsync(client, classId, TestData.NewStudentId());
 
-        var items = (await HttpJson.ReadJsonAsync(await GetAsync(client, "/me/holds", mine))).EnumerateArray().ToList();
+        var items = (await HttpJson.ReadJsonAsync(await TestData.SendAsync(client, HttpMethod.Get, "/me/holds", mine))).EnumerateArray().ToList();
 
         Assert.Single(items);
     }
@@ -140,7 +120,7 @@ public class HoldReadContractTests(PostgresFixture fixture)
     {
         using var client = fixture.Factory.CreateClient();
 
-        var response = await GetAsync(client, "/me/holds", header);
+        var response = await TestData.SendAsync(client, HttpMethod.Get, "/me/holds", header);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("INVALID_STUDENT_ID", await HttpJson.ErrorCodeAsync(response));
@@ -151,7 +131,7 @@ public class HoldReadContractTests(PostgresFixture fixture)
     {
         using var client = fixture.Factory.CreateClient();
 
-        var response = await GetAsync(client, "/me/holds", TestData.NewStudentId());
+        var response = await TestData.SendAsync(client, HttpMethod.Get, "/me/holds", TestData.NewStudentId());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var root = await HttpJson.ReadJsonAsync(response);
@@ -168,12 +148,12 @@ public class HoldReadContractTests(PostgresFixture fixture)
         {
             using var client = firstFactory.CreateClient();
             classId = await TestData.CreateClassAsync(client, 5);
-            holdId = (await PostHoldAsync(client, classId, TestData.NewStudentId())).GetProperty("holdId").GetString()!;
+            holdId = (await TestData.CreateHoldJsonAsync(client, classId, TestData.NewStudentId())).GetProperty("holdId").GetString()!;
         }
 
         using var secondFactory = new AppFactory();
         using var secondClient = secondFactory.CreateClient();
-        var response = await GetAsync(secondClient, $"/holds/{holdId}");
+        var response = await TestData.SendAsync(secondClient, HttpMethod.Get, $"/holds/{holdId}");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var root = await HttpJson.ReadJsonAsync(response);

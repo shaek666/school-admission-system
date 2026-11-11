@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
+using SchoolAdmission.Api.Http;
 using SchoolAdmission.Api.Tests.Infrastructure;
 
 namespace SchoolAdmission.Api.Tests;
@@ -17,15 +18,12 @@ public partial class HoldContractTests(PostgresFixture fixture)
     [GeneratedRegex(@"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$")]
     private static partial Regex ExpiresAtPattern();
 
-    private static Task<HttpResponseMessage> PostHoldAsync(HttpClient client, string classId, params string[] studentIds)
+    private static async Task<HttpResponseMessage> PostRepeatedHeaderAsync(HttpClient client, string classId)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/classes/{classId}/holds");
-        foreach (var studentId in studentIds)
-        {
-            request.Headers.Add("X-Student-Id", studentId);
-        }
-
-        return client.SendAsync(request);
+        request.Headers.Add(StudentIdHeader.Name, StudentId);
+        request.Headers.Add(StudentIdHeader.Name, StudentId);
+        return await client.SendAsync(request);
     }
 
     [Fact]
@@ -34,7 +32,7 @@ public partial class HoldContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 5);
 
-        var response = await PostHoldAsync(client, classId, StudentId);
+        var response = await TestData.SendAsync(client, HttpMethod.Post, $"/classes/{classId}/holds", StudentId);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var root = await HttpJson.ReadJsonAsync(response);
@@ -57,7 +55,7 @@ public partial class HoldContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 5);
 
-        var response = await PostHoldAsync(client, classId);
+        var response = await TestData.SendAsync(client, HttpMethod.Post, $"/classes/{classId}/holds", null);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("INVALID_STUDENT_ID", await HttpJson.ErrorCodeAsync(response));
@@ -68,7 +66,7 @@ public partial class HoldContractTests(PostgresFixture fixture)
     {
         using var client = fixture.Factory.CreateClient();
 
-        var response = await PostHoldAsync(client, Guid.NewGuid().ToString());
+        var response = await TestData.SendAsync(client, HttpMethod.Post, $"/classes/{Guid.NewGuid()}/holds", null);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("INVALID_STUDENT_ID", await HttpJson.ErrorCodeAsync(response));
@@ -80,7 +78,7 @@ public partial class HoldContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 5);
 
-        var response = await PostHoldAsync(client, classId, StudentId[..16]);
+        var response = await TestData.SendAsync(client, HttpMethod.Post, $"/classes/{classId}/holds", StudentId[..16]);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("INVALID_STUDENT_ID", await HttpJson.ErrorCodeAsync(response));
@@ -92,7 +90,7 @@ public partial class HoldContractTests(PostgresFixture fixture)
         using var client = fixture.Factory.CreateClient();
         var classId = await TestData.CreateClassAsync(client, 5);
 
-        var response = await PostHoldAsync(client, classId, StudentId, StudentId);
+        var response = await PostRepeatedHeaderAsync(client, classId);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("INVALID_STUDENT_ID", await HttpJson.ErrorCodeAsync(response));
@@ -103,7 +101,7 @@ public partial class HoldContractTests(PostgresFixture fixture)
     {
         using var client = fixture.Factory.CreateClient();
 
-        var response = await PostHoldAsync(client, Guid.NewGuid().ToString(), StudentId);
+        var response = await TestData.SendAsync(client, HttpMethod.Post, $"/classes/{Guid.NewGuid()}/holds", StudentId);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("CLASS_NOT_FOUND", await HttpJson.ErrorCodeAsync(response));
@@ -117,7 +115,7 @@ public partial class HoldContractTests(PostgresFixture fixture)
     {
         using var client = fixture.Factory.CreateClient();
 
-        var response = await PostHoldAsync(client, classId, StudentId);
+        var response = await TestData.SendAsync(client, HttpMethod.Post, $"/classes/{classId}/holds", StudentId);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("CLASS_NOT_FOUND", await HttpJson.ErrorCodeAsync(response));

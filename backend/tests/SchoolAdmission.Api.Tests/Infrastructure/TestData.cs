@@ -1,5 +1,8 @@
 using System.Globalization;
+using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using SchoolAdmission.Api.Http;
 
 namespace SchoolAdmission.Api.Tests.Infrastructure;
 
@@ -31,4 +34,27 @@ public static class TestData
         response.EnsureSuccessStatusCode();
         return (await HttpJson.ReadJsonAsync(response)).GetProperty("id").GetString()!;
     }
+
+    /// <summary>Sends one request. The student id header is added only when <paramref name="studentId"/> is not null.</summary>
+    public static async Task<HttpResponseMessage> SendAsync(HttpClient client, HttpMethod method, string url, string? studentId = null)
+    {
+        using var request = new HttpRequestMessage(method, url);
+        if (studentId is not null)
+        {
+            request.Headers.Add(StudentIdHeader.Name, studentId);
+        }
+
+        return await client.SendAsync(request);
+    }
+
+    /// <summary>Creates a hold, asserts 201 and returns the response body.</summary>
+    public static async Task<JsonElement> CreateHoldJsonAsync(HttpClient client, string classId, string studentId)
+    {
+        var response = await SendAsync(client, HttpMethod.Post, $"/classes/{classId}/holds", studentId);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return await HttpJson.ReadJsonAsync(response);
+    }
+
+    public static async Task<string> CreateHoldAsync(HttpClient client, string classId, string studentId) =>
+        (await CreateHoldJsonAsync(client, classId, studentId)).GetProperty("holdId").GetString()!;
 }

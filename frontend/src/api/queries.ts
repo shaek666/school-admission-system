@@ -91,3 +91,29 @@ export function useApply() {
     },
   })
 }
+
+export type ConfirmResponse = { holdId: string; status: string }
+
+type HoldAction = { holdId: string; studentId: string }
+
+export function useConfirm() {
+  const invalidateAll = useInvalidateAll()
+  return useMutation({
+    mutationFn: ({ holdId, studentId }: HoldAction) =>
+      apiFetch<ConfirmResponse>(`/holds/${encodeURIComponent(holdId)}/confirm`, { method: 'POST', studentId }),
+    onSettled: () => {
+      void invalidateAll()
+    },
+  })
+}
+
+export function useCancel() {
+  const invalidateAll = useInvalidateAll()
+  return useMutation({
+    mutationFn: ({ holdId, studentId }: HoldAction) =>
+      apiFetch<void>(`/holds/${encodeURIComponent(holdId)}`, { method: 'DELETE', studentId }),
+    onSettled: () => {
+      void invalidateAll()
+    },
+  })
+}

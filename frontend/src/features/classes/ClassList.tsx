@@ -3,6 +3,7 @@ import { errorCode } from '../../api/client.ts'
 import { useApply, useClasses, type ClassResponse } from '../../api/queries.ts'
 import { messageFor } from '../../messages.ts'
 import { notifyError, notifyInfo } from '../../notify.ts'
+import { highlightClass } from '../holds/highlight.ts'
 import { useStudentId } from '../student/useStudentId.ts'
 import { applyOutcome } from './applyOutcome.ts'
 
@@ -74,7 +75,7 @@ export function ClassList() {
           const code = errorCode(error)
           const message = messageFor(code)
           const outcome = applyOutcome(code)
-          if (outcome === 'highlight-existing') notifyInfo('Already applied', message)
+          if (outcome === 'highlight-existing') highlightClass(classId)
           else if (outcome === 'refresh-classes') notifyInfo('Class is full', message)
           else notifyError('Could not apply', message)
         },

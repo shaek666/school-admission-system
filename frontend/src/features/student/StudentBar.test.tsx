@@ -33,6 +33,15 @@ describe('StudentBar', () => {
     expect(window.localStorage.getItem('studentId')).toBe(VALID)
   })
 
+  it('saves the trimmed id when a value with a leading space is pasted', async () => {
+    renderWithProviders(<StudentBar />)
+    await userEvent.click(screen.getByLabelText(LABEL))
+    await userEvent.paste(` ${VALID}`)
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByText(VALID)).toBeInTheDocument()
+    expect(window.localStorage.getItem('studentId')).toBe(VALID)
+  })
+
   it('keeps other hook users in sync in the same tab', async () => {
     renderWithProviders(
       <>

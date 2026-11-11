@@ -1,9 +1,9 @@
 import { Button, NumberInput, Paper, Stack, TextInput, Title } from '@mantine/core'
 import { useForm } from '@mantine/form'
-import { notifications } from '@mantine/notifications'
 import { errorCode } from '../../api/client.ts'
 import { useCreateClass } from '../../api/queries.ts'
 import { messageFor } from '../../messages.ts'
+import { notifyError, notifySuccess } from '../../notify.ts'
 import { MAX_SEATS, MIN_SEATS, parseSeats, validateClassForm } from './classForm.ts'
 
 export function CreateClassForm() {
@@ -22,11 +22,11 @@ export function CreateClassForm() {
       {
         onSuccess: (created) => {
           form.reset()
-          notifications.show({ color: 'green', title: 'Class created', message: `${created.name} is open for applications.` })
+          notifySuccess('Class created', `${created.name} is open for applications.`)
         },
         onError: (error) => {
           const code = errorCode(error)
-          notifications.show({ color: 'red', title: 'Could not create the class', message: messageFor(code) })
+          notifyError('Could not create the class', messageFor(code))
         },
       },
     )
@@ -44,6 +44,7 @@ export function CreateClassForm() {
             max={MAX_SEATS}
             allowDecimal={false}
             allowNegative={false}
+            clampBehavior="none"
             key={form.key('totalSeats')}
             {...form.getInputProps('totalSeats')}
           />

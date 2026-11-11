@@ -75,7 +75,9 @@ export function useCreateClass() {
   return useMutation({
     mutationFn: (body: { name: string; totalSeats: number }) =>
       apiFetch<ClassResponse>('/classes', { method: 'POST', body: JSON.stringify(body) }),
-    onSettled: invalidateAll,
+    onSettled: () => {
+      void invalidateAll()
+    },
   })
 }
 
@@ -84,6 +86,8 @@ export function useApply() {
   return useMutation({
     mutationFn: ({ classId, studentId }: { classId: string; studentId: string }) =>
       apiFetch<HoldCreatedResponse>(`/classes/${encodeURIComponent(classId)}/holds`, { method: 'POST', studentId }),
-    onSettled: invalidateAll,
+    onSettled: () => {
+      void invalidateAll()
+    },
   })
 }

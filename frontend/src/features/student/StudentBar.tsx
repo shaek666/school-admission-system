@@ -22,7 +22,6 @@ export function StudentBar() {
           label="Student birth registration number"
           placeholder="17 digits"
           inputMode="numeric"
-          maxLength={17}
           key={form.key('studentId')}
           {...form.getInputProps('studentId')}
         />

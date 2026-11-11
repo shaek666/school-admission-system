@@ -1,17 +1,21 @@
 import { Badge, Button, Group, Paper, Stack, Text } from '@mantine/core'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { errorCode } from '../../api/client.ts'
 import { useCancel, useConfirm, useInvalidateAll, type MyHoldResponse } from '../../api/queries.ts'
+import { serverNow } from '../../api/clock.ts'
 import { messageFor } from '../../messages.ts'
 import { notifyError, notifySuccess } from '../../notify.ts'
 import { formatMmSs, remainingMs } from './countdown.ts'
+import { clearHighlight } from './highlight.ts'
 import { useTickingNow } from './ticker.ts'
 
-export const ALREADY_APPLIED_NOTE = 'You already applied to this class. Your application is below.'
+const HIGHLIGHT_MS = 6000
+const MAX_TIMEOUT_MS = 2 ** 31 - 1
 
 const BADGE_COLORS: Readonly<Record<string, string>> = {
   HELD: 'yellow',
   CONFIRMED: 'green',
+  EXPIRED: 'gray',
   CANCELLED: 'red',
 }
 
@@ -28,7 +32,10 @@ export function HoldCard({ hold, studentId, highlighted }: {
   const invalidateAll = useInvalidateAll()
   const expiryReported = useRef(false)
   const remaining = remainingMs(hold.expiresAt, now)
-  const timedOut = isHeld && remaining <= 0
+  // The 1 s ticker can lag the expiry; a one-off timer at the exact instant closes that gap.
+  const expiryKey = `${hold.holdId}@${hold.expiresAt}`
+  const [expiredKey, setExpiredKey] = useState<string | null>(null)
+  const timedOut = isHeld && (remaining <= 0 || expiredKey === expiryKey)
   const status = timedOut ? 'EXPIRED' : hold.status
   const disabled = timedOut || confirm.isPending || cancel.isPending
 
@@ -38,6 +45,21 @@ export function HoldCard({ hold, studentId, highlighted }: {
     expiryReported.current = true
     void invalidateAll()
   }, [timedOut, invalidateAll])
+
+  useEffect(() => {
+    if (!isHeld) return
+    const delay = remainingMs(hold.expiresAt, serverNow())
+    if (delay > MAX_TIMEOUT_MS) return
+    const timer = setTimeout(() => setExpiredKey(expiryKey), delay)
+    return () => clearTimeout(timer)
+  }, [isHeld, hold.expiresAt, expiryKey])
+
+  // The highlight lasts from when this card shows it, not from when the error arrived.
+  useEffect(() => {
+    if (!highlighted) return
+    const timer = setTimeout(() => clearHighlight(hold.classId), HIGHLIGHT_MS)
+    return () => clearTimeout(timer)
+  }, [highlighted, hold.classId])
 
   useEffect(() => {
     if (highlighted) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
@@ -72,7 +94,7 @@ export function HoldCard({ hold, studentId, highlighted }: {
           <Text fw={600}>{hold.className}</Text>
           <Badge color={BADGE_COLORS[status] ?? 'gray'} variant="light">{status}</Badge>
         </Group>
-        {highlighted && <Text size="sm" role="status">{ALREADY_APPLIED_NOTE}</Text>}
+        {highlighted && <Text size="sm" role="status">{messageFor('ALREADY_APPLIED')}</Text>}
         {isHeld && (
           <>
             <Text size="sm" c="dimmed">

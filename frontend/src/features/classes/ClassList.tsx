@@ -1,12 +1,15 @@
 import { Button, Group, Paper, Progress, Stack, Text } from '@mantine/core'
+import { useQueryClient } from '@tanstack/react-query'
 import { errorCode } from '../../api/client.ts'
-import { useApply, useClasses, type ClassResponse } from '../../api/queries.ts'
+import { myHoldsKey, useApply, useClasses, type ClassResponse, type MyHoldResponse } from '../../api/queries.ts'
 import { QuerySection } from '../../components/QuerySection.tsx'
 import { messageFor } from '../../messages.ts'
 import { notifyError, notifyInfo } from '../../notify.ts'
 import { highlightClass } from '../holds/highlight.ts'
 import { useStudentId } from '../student/useStudentId.ts'
 import { applyOutcome } from './applyOutcome.ts'
+
+const ACTIVE_STATUSES: ReadonlySet<string> = new Set(['HELD', 'CONFIRMED'])
 
 const NO_STUDENT_HINT_ID = 'no-student-hint'
 export const NO_STUDENT_HINT = "Enter the student's 17-digit number above to apply."
@@ -66,6 +69,7 @@ export function ClassList() {
   const [studentId] = useStudentId()
   const classes = useClasses()
   const apply = useApply()
+  const queryClient = useQueryClient()
 
   const onApply = (classId: string) => {
     if (studentId === null || apply.isPending) return
@@ -78,7 +82,10 @@ export function ClassList() {
           const outcome = applyOutcome(code)
           if (outcome === 'highlight-existing') {
             highlightClass(classId)
-            notifyInfo('Already applied', message)
+            // The highlighted card explains itself; only tell the guardian if no such card is cached.
+            const cached = queryClient.getQueryData<MyHoldResponse[]>(myHoldsKey(studentId))
+            const cardShown = cached?.some((hold) => hold.classId === classId && ACTIVE_STATUSES.has(hold.status))
+            if (!cardShown) notifyInfo('Already applied', message)
           }
           else if (outcome === 'refresh-classes') notifyInfo('Class is full', message)
           else notifyError('Could not apply', message)

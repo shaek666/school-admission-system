@@ -5,6 +5,7 @@ import { messageFor } from '../../messages.ts'
 import { notifyInfo } from '../../notify.ts'
 import { json, useFetchStub } from '../../test-fetch.ts'
 import { renderWithProviders } from '../../test-utils.tsx'
+import { MyApplications } from '../holds/MyApplications.tsx'
 import { STUDENT_ID_KEY } from '../student/useStudentId.ts'
 import { ClassList, NO_STUDENT_HINT } from './ClassList.tsx'
 
@@ -104,5 +105,19 @@ describe('ClassList', () => {
     renderWithProviders(<ClassList />)
     await userEvent.click(await screen.findByRole('button', { name: 'Apply to Class One' }))
     await waitFor(() => expect(notifyInfo).toHaveBeenCalledWith('Already applied', messageFor('ALREADY_APPLIED')))
+  })
+
+  it('only highlights, without a notification, when the cached applications hold an active hold for the class', async () => {
+    window.localStorage.setItem(STUDENT_ID_KEY, VALID_ID)
+    const mine = { holdId: 'h1', classId: 'c1', className: 'Class One', status: 'HELD', expiresAt: new Date(Date.now() + 600_000).toISOString() }
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return Promise.resolve(json({ error: { code: 'ALREADY_APPLIED', message: 'x' } }, 409))
+      return Promise.resolve(json(url.endsWith('/classes') ? [open] : [mine]))
+    })
+    renderWithProviders(<><ClassList /><MyApplications /></>)
+    await screen.findByText('HELD')
+    await userEvent.click(await screen.findByRole('button', { name: 'Apply to Class One' }))
+    expect(await screen.findByText(messageFor('ALREADY_APPLIED'))).toBeInTheDocument()
+    expect(notifyInfo).not.toHaveBeenCalled()
   })
 })

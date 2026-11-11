@@ -37,4 +37,9 @@ public sealed class FakeHoldRepository(CallLog log) : IHoldRepository
             Guid.NewGuid(), classId, "Class 6", student.Value, HoldStatus.Held, DateTime.UtcNow.AddSeconds(durationSeconds));
         return Task.FromResult(record);
     }
+
+    public Task<HoldRecord?> GetAsync(Guid id, CancellationToken ct) => Task.FromResult<HoldRecord?>(null);
+
+    public Task<IReadOnlyList<HoldRecord>> ListForStudentAsync(StudentId student, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<HoldRecord>>([]);
 }

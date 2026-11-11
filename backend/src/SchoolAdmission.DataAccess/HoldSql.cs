@@ -13,4 +13,10 @@ internal static class HoldSql
         ({Alias}.status = '{HoldStatus.Confirmed}'
          OR ({Alias}.status = '{HoldStatus.Held}' AND {Alias}.expires_at > now()))
         """;
+
+    /// <summary>The status as clients see it: a HELD hold past its expiry reads as EXPIRED, by database time.</summary>
+    public const string DerivedStatus = $"""
+        CASE WHEN {Alias}.status = '{HoldStatus.Held}' AND {Alias}.expires_at <= now()
+             THEN '{HoldStatus.Expired}' ELSE {Alias}.status END
+        """;
 }

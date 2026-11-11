@@ -15,6 +15,15 @@ public static class HoldEndpoints
             return Results.Json(HoldCreatedResponse.From(hold), statusCode: StatusCodes.Status201Created);
         });
 
+        app.MapGet("/holds/{holdId}", async (string holdId, HoldService service, CancellationToken ct) =>
+            HoldResponse.From(await service.GetAsync(holdId, ct)));
+
+        app.MapGet("/me/holds", async (HttpRequest http, HoldService service, CancellationToken ct) =>
+        {
+            var student = StudentIdHeader.Require(http);
+            return (await service.ListMineAsync(student, ct)).Select(MyHoldResponse.From).ToList();
+        });
+
         return app;
     }
 }

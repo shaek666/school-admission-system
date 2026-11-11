@@ -62,12 +62,30 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
                     date_trunc('second', now()) + make_interval(secs => {2}::double precision), now())
             RETURNING id, class_id, student_id, status, expires_at
         )
-        SELECT i.id AS "Id", i.class_id AS "ClassId", c.name AS "ClassName", i.student_id AS "StudentId",
-               CASE WHEN i.status = '{{HoldStatus.Held}}' AND i.expires_at <= now()
-                    THEN '{{HoldStatus.Expired}}' ELSE i.status END AS "Status",
-               i.expires_at AS "ExpiresAtUtc"
-        FROM inserted i
-        JOIN classes c ON c.id = i.class_id
+        SELECT {{HoldSql.Alias}}.id AS "Id", {{HoldSql.Alias}}.class_id AS "ClassId", c.name AS "ClassName",
+               {{HoldSql.Alias}}.student_id AS "StudentId", {{HoldSql.DerivedStatus}} AS "Status",
+               {{HoldSql.Alias}}.expires_at AS "ExpiresAtUtc"
+        FROM inserted {{HoldSql.Alias}}
+        JOIN classes c ON c.id = {{HoldSql.Alias}}.class_id
+        """;
+
+    private const string SelectSql = $$"""
+        SELECT {{HoldSql.Alias}}.id AS "Id", {{HoldSql.Alias}}.class_id AS "ClassId", c.name AS "ClassName",
+               {{HoldSql.Alias}}.student_id AS "StudentId", {{HoldSql.DerivedStatus}} AS "Status",
+               {{HoldSql.Alias}}.expires_at AS "ExpiresAtUtc"
+        FROM holds {{HoldSql.Alias}}
+        JOIN classes c ON c.id = {{HoldSql.Alias}}.class_id
+        """;
+
+    private const string GetSql = SelectSql + $$"""
+
+        WHERE {{HoldSql.Alias}}.id = {0}
+        """;
+
+    private const string ListForStudentSql = SelectSql + $$"""
+
+        WHERE {{HoldSql.Alias}}.student_id = {0}
+        ORDER BY {{HoldSql.Alias}}.created_at DESC, {{HoldSql.Alias}}.id DESC
         """;
 
     public async Task ExpireStaleForStudentAsync(Guid classId, StudentId student, CancellationToken ct) =>
@@ -95,5 +113,17 @@ public sealed class HoldRepository(AdmissionDbContext context) : IHoldRepository
             .SqlQueryRaw<HoldRow>(InsertSql, classId, student.Value, durationSeconds)
             .ToListAsync(ct);
         return rows.Single().ToRecord();
+    }
+
+    public async Task<HoldRecord?> GetAsync(Guid id, CancellationToken ct)
+    {
+        var rows = await context.Database.SqlQueryRaw<HoldRow>(GetSql, id).ToListAsync(ct);
+        return rows.SingleOrDefault()?.ToRecord();
+    }
+
+    public async Task<IReadOnlyList<HoldRecord>> ListForStudentAsync(StudentId student, CancellationToken ct)
+    {
+        var rows = await context.Database.SqlQueryRaw<HoldRow>(ListForStudentSql, student.Value).ToListAsync(ct);
+        return rows.ConvertAll(r => r.ToRecord());
     }
 }

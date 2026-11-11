@@ -40,7 +40,12 @@ namespace SchoolAdmission.DataAccess.Migrations
                     b.HasKey("Id")
                         .HasName("pk_classes");
 
-                    b.ToTable("classes", (string)null);
+                    b.ToTable("classes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_classes_name_length", "char_length(name) BETWEEN 1 AND 200");
+
+                            t.HasCheckConstraint("ck_classes_total_seats_range", "total_seats BETWEEN 1 AND 100000");
+                        });
                 });
 
             modelBuilder.Entity("SchoolAdmission.DataAccess.Entities.HoldEntity", b =>
@@ -77,10 +82,17 @@ namespace SchoolAdmission.DataAccess.Migrations
                     b.HasIndex("ClassId")
                         .HasDatabaseName("ix_holds_class_id");
 
+                    b.HasIndex("ClassId", "Status")
+                        .HasDatabaseName("ix_holds_class_status");
+
                     b.HasIndex("StudentId", "ClassId")
                         .IsUnique()
                         .HasDatabaseName("ux_holds_student_class_active")
                         .HasFilter("status IN ('HELD','CONFIRMED')");
+
+                    b.HasIndex("StudentId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_holds_student_created");
 
                     b.ToTable("holds", null, t =>
                         {

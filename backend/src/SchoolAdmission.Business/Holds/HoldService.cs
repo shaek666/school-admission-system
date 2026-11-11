@@ -57,4 +57,17 @@ public sealed class HoldService
             hold.Id, student.Masked, id);
         return hold;
     }
+
+    public async Task<HoldRecord> GetAsync(string holdId, CancellationToken ct)
+    {
+        if (!Ids.TryParse(holdId, out var id))
+        {
+            throw Errors.HoldNotFound();
+        }
+
+        return await _holds.GetAsync(id, ct) ?? throw Errors.HoldNotFound();
+    }
+
+    public Task<IReadOnlyList<HoldRecord>> ListMineAsync(StudentId student, CancellationToken ct) =>
+        _holds.ListForStudentAsync(student, ct);
 }

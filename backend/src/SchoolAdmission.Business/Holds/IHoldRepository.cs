@@ -15,4 +15,10 @@ public interface IHoldRepository
 
     /// <summary>Inserts a HELD hold that expires after <paramref name="durationSeconds"/>, by database time.</summary>
     Task<HoldRecord> InsertAsync(Guid classId, StudentId student, int durationSeconds, CancellationToken ct);
+
+    /// <summary>Reads one hold. A HELD hold past its expiry reads as EXPIRED.</summary>
+    Task<HoldRecord?> GetAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Reads the student's holds, newest first. Same derived status as <see cref="GetAsync"/>.</summary>
+    Task<IReadOnlyList<HoldRecord>> ListForStudentAsync(StudentId student, CancellationToken ct);
 }

@@ -27,6 +27,12 @@ internal sealed class HoldEntityConfiguration : IEntityTypeConfiguration<HoldEnt
 
         builder.HasIndex(h => h.ClassId).HasDatabaseName("ix_holds_class_id");
 
+        builder.HasIndex(h => new { h.StudentId, h.CreatedAt })
+            .IsDescending(false, true)
+            .HasDatabaseName(DbNames.StudentCreatedIndex);
+
+        builder.HasIndex(h => new { h.ClassId, h.Status }).HasDatabaseName(DbNames.ClassStatusIndex);
+
         builder.HasIndex(h => new { h.StudentId, h.ClassId })
             .IsUnique()
             .HasDatabaseName(DbNames.ActiveHoldIndex)

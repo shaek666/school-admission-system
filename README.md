@@ -10,7 +10,7 @@ docker compose up
 
 The first build takes a few minutes. The frontend opens at <http://localhost:3000>. The API answers at <http://localhost:8080>.
 
-Docker and Docker Compose are the only tools you need. Nothing is installed on the host.
+The only requirement is Docker with Docker Compose. Every other tool runs inside a container.
 
 The database starts empty.
 
@@ -19,9 +19,9 @@ The database starts empty.
 1. In the "School admin" panel, enter a class name and a seat count, then press "Create class".
 2. Enter a 17-digit birth registration number at the top of the page, press "Save", then press "Apply" on the class.
 
-The class list shows how many seats are free, held and confirmed. The counts refresh every few seconds.
+The class list shows how many seats are available, on hold and confirmed. The class list refreshes every 3 seconds and the application list every 5 seconds.
 
-The "Guardian: my applications" panel shows the application, the time left, and the buttons "Pay admission fee" and "Cancel". When the time runs out the card shows EXPIRED and the Pay button is disabled. The browser keeps the student number, so a refresh shows the same applications.
+For a held application the "Guardian: my applications" panel shows the time left, and the buttons "Pay admission fee" and "Cancel". When the time runs out the card shows EXPIRED and the Pay button is disabled. The browser keeps the student number, so a refresh shows the same applications.
 
 ## Settings
 
@@ -58,7 +58,7 @@ The `--build` flag rebuilds the test image. Drop it to run the image that is alr
 
 ## Data
 
-The database lives in a Docker volume named `pgdata`.
+The database lives in a Docker volume that the compose file calls `pgdata`.
 
 - `docker compose down` stops the containers and keeps the data.
 - `docker compose down -v` stops the containers and deletes the data.
@@ -77,3 +77,4 @@ The second API answers at <http://localhost:8081>. The frontend keeps using port
 
 - ASSUMPTIONS.md lists each choice the brief left open, with the reason.
 - AI_USAGE.md lists the AI tool, the parts it wrote, and the mistakes it made.
+- docs/adr/0001-seat-locking.md explains how the seat count stays safe.

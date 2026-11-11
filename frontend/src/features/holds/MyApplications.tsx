@@ -1,7 +1,6 @@
-import { Alert, Button, Loader, Paper, Stack, Text, Title } from '@mantine/core'
-import { errorCode } from '../../api/client.ts'
+import { Text } from '@mantine/core'
 import { useMyHolds } from '../../api/queries.ts'
-import { messageFor } from '../../messages.ts'
+import { QuerySection } from '../../components/QuerySection.tsx'
 import { useStudentId } from '../student/useStudentId.ts'
 import { groupHolds } from './groupHolds.ts'
 import { HoldCard } from './HoldCard.tsx'
@@ -15,38 +14,29 @@ export function MyApplications() {
   const [studentId] = useStudentId()
   const holds = useMyHolds(studentId)
   const highlightedClassId = useHighlightedClassId()
-  const items = holds.data ? groupHolds(holds.data) : []
 
   return (
-    <Paper withBorder p="lg" component="section" aria-labelledby="applications-title">
-      <Stack>
-        <Title order={2} size="h3" id="applications-title">Guardian: my applications</Title>
-        {studentId === null && <Text size="sm" c="dimmed">{NO_STUDENT_APPLICATIONS_HINT}</Text>}
-        {studentId !== null && holds.isPending && <Loader size="sm" aria-label="Loading applications" />}
-        {holds.isError && (
-          <Alert color="red" title="Could not load applications">
-            <Stack gap="xs" align="flex-start">
-              <Text size="sm">{messageFor(errorCode(holds.error))}</Text>
-              <Button size="xs" variant="default" loading={holds.isFetching} onClick={() => void holds.refetch()}>
-                Retry
-              </Button>
-            </Stack>
-          </Alert>
-        )}
-        {studentId !== null && holds.data?.length === 0 && <Text>No applications yet.</Text>}
-        {studentId !== null && items.length > 0 && (
-          <Stack component="ul" p={0} m={0}>
-            {items.map((hold) => (
-              <HoldCard
-                key={hold.holdId}
-                hold={hold}
-                studentId={studentId}
-                highlighted={hold.classId === highlightedClassId && ACTIVE_STATUSES.has(hold.status)}
-              />
-            ))}
-          </Stack>
-        )}
-      </Stack>
-    </Paper>
+    <QuerySection
+      titleId="applications-title"
+      title="Guardian: my applications"
+      hint={studentId === null && <Text size="sm" c="dimmed">{NO_STUDENT_APPLICATIONS_HINT}</Text>}
+      loading={holds.isLoading}
+      loadingLabel="Loading applications"
+      errorTitle="Could not load applications"
+      emptyText="No applications yet."
+      query={holds}
+      items={holds.data && groupHolds(holds.data)}
+      renderItem={(hold) =>
+        // Without a student the query is disabled and there are no items; the check narrows the type.
+        studentId !== null && (
+          <HoldCard
+            key={hold.holdId}
+            hold={hold}
+            studentId={studentId}
+            highlighted={hold.classId === highlightedClassId && ACTIVE_STATUSES.has(hold.status)}
+          />
+        )
+      }
+    />
   )
 }

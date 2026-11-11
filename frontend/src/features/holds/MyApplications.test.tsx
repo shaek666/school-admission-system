@@ -2,31 +2,26 @@ import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { recordServerDate, resetClock } from '../../api/clock.ts'
+import { json, useFetchStub } from '../../test-fetch.ts'
 import { renderWithProviders } from '../../test-utils.tsx'
 import { ClassList } from '../classes/ClassList.tsx'
 import { STUDENT_ID_KEY } from '../student/useStudentId.ts'
 import { resetHighlight } from './highlight.ts'
-import { MyApplications } from './MyApplications.tsx'
+import { MyApplications, NO_STUDENT_APPLICATIONS_HINT } from './MyApplications.tsx'
 
 const VALID_ID = '12345678901234567'
 const NOW = '2026-01-01T00:00:00Z'
 
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
-
 const held = (expiresAt: string) => ({ holdId: 'h1', classId: 'c1', className: 'Class One', status: 'HELD', expiresAt })
 
 describe('MyApplications', () => {
-  const fetchMock = vi.fn()
+  const fetchMock = useFetchStub()
 
   beforeEach(() => {
     window.localStorage.setItem(STUDENT_ID_KEY, VALID_ID)
-    fetchMock.mockReset()
-    vi.stubGlobal('fetch', fetchMock)
   })
   afterEach(() => {
     vi.useRealTimers()
-    vi.unstubAllGlobals()
     window.localStorage.clear()
     resetClock()
     resetHighlight()
@@ -50,6 +45,28 @@ describe('MyApplications', () => {
     expect(screen.getByText('EXPIRED')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Pay admission fee/ })).toBeDisabled()
     expect(screen.getByRole('button', { name: /^Cancel/ })).toBeDisabled()
+  })
+
+  it('refetches /me/holds exactly once when a held card reaches zero', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date(NOW))
+    recordServerDate('Thu, 01 Jan 2026 00:00:00 GMT')
+    fetchMock.mockImplementation(() => Promise.resolve(json([held('2026-01-01T00:00:02Z')])))
+    renderWithProviders(<MyApplications />)
+    expect(await screen.findByText('00:02')).toBeInTheDocument()
+    const holdsCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/me/holds')).length
+    expect(holdsCalls()).toBe(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    expect(screen.getByText('EXPIRED')).toBeInTheDocument()
+    expect(holdsCalls()).toBe(2)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
+    expect(holdsCalls()).toBe(2)
   })
 
   it('names each Pay and Cancel button after its class', async () => {
@@ -88,12 +105,20 @@ describe('MyApplications', () => {
     })
   })
 
-  it('shows empty text, a hint without a student, and an error alert with the network message', async () => {
+  it('shows empty text when there are no applications', async () => {
     fetchMock.mockImplementation(() => Promise.resolve(json([])))
-    const first = renderWithProviders(<MyApplications />)
+    renderWithProviders(<MyApplications />)
     expect(await screen.findByText('No applications yet.')).toBeInTheDocument()
-    first.unmount()
+  })
 
+  it('shows the no-student hint and no loader without a student', async () => {
+    window.localStorage.clear()
+    renderWithProviders(<MyApplications />)
+    expect(await screen.findByText(NO_STUDENT_APPLICATIONS_HINT)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Loading applications')).not.toBeInTheDocument()
+  })
+
+  it('shows an error alert with the network message and Retry', async () => {
     fetchMock.mockImplementation(() => Promise.reject(new TypeError('down')))
     renderWithProviders(<MyApplications />)
     expect(await screen.findByText(/admission server cannot be reached/)).toBeInTheDocument()

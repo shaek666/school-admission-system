@@ -1,30 +1,18 @@
 import { Badge, Button, Group, Paper, Stack, Text } from '@mantine/core'
-import { useEffect, useRef, useState } from 'react'
-import { serverNow } from '../../api/clock.ts'
+import { useEffect, useRef } from 'react'
 import { errorCode } from '../../api/client.ts'
-import { useCancel, useConfirm, type MyHoldResponse } from '../../api/queries.ts'
+import { useCancel, useConfirm, useInvalidateAll, type MyHoldResponse } from '../../api/queries.ts'
 import { messageFor } from '../../messages.ts'
 import { notifyError, notifySuccess } from '../../notify.ts'
 import { formatMmSs, remainingMs } from './countdown.ts'
+import { useTickingNow } from './ticker.ts'
 
-const TICK_MS = 1000
 export const ALREADY_APPLIED_NOTE = 'You already applied to this class. Your application is below.'
 
 const BADGE_COLORS: Readonly<Record<string, string>> = {
   HELD: 'yellow',
   CONFIRMED: 'green',
-  EXPIRED: 'gray',
   CANCELLED: 'red',
-}
-
-function useServerNow(active: boolean): number {
-  const [now, setNow] = useState(serverNow)
-  useEffect(() => {
-    if (!active) return
-    const id = setInterval(() => setNow(serverNow()), TICK_MS)
-    return () => clearInterval(id)
-  }, [active])
-  return now
 }
 
 export function HoldCard({ hold, studentId, highlighted }: {
@@ -36,11 +24,20 @@ export function HoldCard({ hold, studentId, highlighted }: {
   const cancel = useCancel()
   const ref = useRef<HTMLLIElement>(null)
   const isHeld = hold.status === 'HELD'
-  const now = useServerNow(isHeld)
+  const now = useTickingNow(isHeld)
+  const invalidateAll = useInvalidateAll()
+  const expiryReported = useRef(false)
   const remaining = remainingMs(hold.expiresAt, now)
   const timedOut = isHeld && remaining <= 0
   const status = timedOut ? 'EXPIRED' : hold.status
   const disabled = timedOut || confirm.isPending || cancel.isPending
+
+  // Let the server's EXPIRED replace the local override; once per card.
+  useEffect(() => {
+    if (!timedOut || expiryReported.current) return
+    expiryReported.current = true
+    void invalidateAll()
+  }, [timedOut, invalidateAll])
 
   useEffect(() => {
     if (highlighted) ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })

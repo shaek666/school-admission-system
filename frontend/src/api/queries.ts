@@ -61,7 +61,7 @@ export function useMyHolds(studentId: string | null) {
   })
 }
 
-function useInvalidateAll() {
+export function useInvalidateAll() {
   const queryClient = useQueryClient()
   return () =>
     Promise.all([
@@ -70,50 +70,42 @@ function useInvalidateAll() {
     ])
 }
 
-export function useCreateClass() {
+// Invalidation is fire-and-forget: TanStack v5 awaits a returned onSettled promise,
+// which would delay the caller's mutate callbacks until the refetch finishes.
+function useInvalidatingMutation<TData, TVariables>(mutationFn: (variables: TVariables) => Promise<TData>) {
   const invalidateAll = useInvalidateAll()
   return useMutation({
-    mutationFn: (body: { name: string; totalSeats: number }) =>
-      apiFetch<ClassResponse>('/classes', { method: 'POST', body: JSON.stringify(body) }),
+    mutationFn,
     onSettled: () => {
       void invalidateAll()
     },
   })
+}
+
+export function useCreateClass() {
+  return useInvalidatingMutation((body: { name: string; totalSeats: number }) =>
+    apiFetch<ClassResponse>('/classes', { method: 'POST', body: JSON.stringify(body) }),
+  )
 }
 
 export function useApply() {
-  const invalidateAll = useInvalidateAll()
-  return useMutation({
-    mutationFn: ({ classId, studentId }: { classId: string; studentId: string }) =>
-      apiFetch<HoldCreatedResponse>(`/classes/${encodeURIComponent(classId)}/holds`, { method: 'POST', studentId }),
-    onSettled: () => {
-      void invalidateAll()
-    },
-  })
+  return useInvalidatingMutation(({ classId, studentId }: { classId: string; studentId: string }) =>
+    apiFetch<HoldCreatedResponse>(`/classes/${encodeURIComponent(classId)}/holds`, { method: 'POST', studentId }),
+  )
 }
 
-export type ConfirmResponse = { holdId: string; status: string }
+type ConfirmResponse = { holdId: string; status: string }
 
 type HoldAction = { holdId: string; studentId: string }
 
 export function useConfirm() {
-  const invalidateAll = useInvalidateAll()
-  return useMutation({
-    mutationFn: ({ holdId, studentId }: HoldAction) =>
-      apiFetch<ConfirmResponse>(`/holds/${encodeURIComponent(holdId)}/confirm`, { method: 'POST', studentId }),
-    onSettled: () => {
-      void invalidateAll()
-    },
-  })
+  return useInvalidatingMutation(({ holdId, studentId }: HoldAction) =>
+    apiFetch<ConfirmResponse>(`/holds/${encodeURIComponent(holdId)}/confirm`, { method: 'POST', studentId }),
+  )
 }
 
 export function useCancel() {
-  const invalidateAll = useInvalidateAll()
-  return useMutation({
-    mutationFn: ({ holdId, studentId }: HoldAction) =>
-      apiFetch<void>(`/holds/${encodeURIComponent(holdId)}`, { method: 'DELETE', studentId }),
-    onSettled: () => {
-      void invalidateAll()
-    },
-  })
+  return useInvalidatingMutation(({ holdId, studentId }: HoldAction) =>
+    apiFetch<void>(`/holds/${encodeURIComponent(holdId)}`, { method: 'DELETE', studentId }),
+  )
 }

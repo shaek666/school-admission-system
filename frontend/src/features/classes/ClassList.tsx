@@ -1,6 +1,7 @@
-import { Alert, Button, Group, Loader, Paper, Progress, Stack, Text, Title } from '@mantine/core'
+import { Button, Group, Paper, Progress, Stack, Text } from '@mantine/core'
 import { errorCode } from '../../api/client.ts'
 import { useApply, useClasses, type ClassResponse } from '../../api/queries.ts'
+import { QuerySection } from '../../components/QuerySection.tsx'
 import { messageFor } from '../../messages.ts'
 import { notifyError, notifyInfo } from '../../notify.ts'
 import { highlightClass } from '../holds/highlight.ts'
@@ -75,7 +76,10 @@ export function ClassList() {
           const code = errorCode(error)
           const message = messageFor(code)
           const outcome = applyOutcome(code)
-          if (outcome === 'highlight-existing') highlightClass(classId)
+          if (outcome === 'highlight-existing') {
+            highlightClass(classId)
+            notifyInfo('Already applied', message)
+          }
           else if (outcome === 'refresh-classes') notifyInfo('Class is full', message)
           else notifyError('Could not apply', message)
         },
@@ -84,39 +88,26 @@ export function ClassList() {
   }
 
   return (
-    <Paper withBorder p="lg" component="section" aria-labelledby="guardian-title">
-      <Stack>
-        <Title order={2} size="h3" id="guardian-title">Guardian: classes</Title>
-        {studentId === null && <Text size="sm" c="dimmed" id={NO_STUDENT_HINT_ID}>{NO_STUDENT_HINT}</Text>}
-        {classes.isPending && <Loader size="sm" aria-label="Loading classes" />}
-        {classes.isError && (
-          <Alert color="red" title="Could not load classes">
-            <Stack gap="xs" align="flex-start">
-              <Text size="sm">
-                {messageFor(errorCode(classes.error))}
-              </Text>
-              <Button size="xs" variant="default" loading={classes.isFetching} onClick={() => void classes.refetch()}>
-                Retry
-              </Button>
-            </Stack>
-          </Alert>
-        )}
-        {classes.data?.length === 0 && <Text>No classes yet.</Text>}
-        {classes.data && classes.data.length > 0 && (
-          <Stack component="ul" p={0} m={0}>
-            {classes.data.map((item) => (
-              <ClassCard
-                key={item.id}
-                item={item}
-                canApply={studentId !== null}
-                applyingId={apply.isPending ? apply.variables.classId : null}
-                isApplying={apply.isPending}
-                onApply={onApply}
-              />
-            ))}
-          </Stack>
-        )}
-      </Stack>
-    </Paper>
+    <QuerySection
+      titleId="guardian-title"
+      title="Guardian: classes"
+      hint={studentId === null && <Text size="sm" c="dimmed" id={NO_STUDENT_HINT_ID}>{NO_STUDENT_HINT}</Text>}
+      loading={classes.isPending}
+      loadingLabel="Loading classes"
+      errorTitle="Could not load classes"
+      emptyText="No classes yet."
+      query={classes}
+      items={classes.data}
+      renderItem={(item) => (
+        <ClassCard
+          key={item.id}
+          item={item}
+          canApply={studentId !== null}
+          applyingId={apply.isPending ? apply.variables.classId : null}
+          isApplying={apply.isPending}
+          onApply={onApply}
+        />
+      )}
+    />
   )
 }
